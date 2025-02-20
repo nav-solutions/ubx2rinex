@@ -10,6 +10,30 @@ UBX2RINEX
 `ubx2rinex` is a small command line utility to deserialize
 a U-Blox data stream into standardized RINEX file(s).
 
+:warning: this tool is work in progress.
+
+## Install from Cargo
+
+You can directly install the tool from Cargo with internet access:
+
+```bash
+cargo install ubx2rinex
+```
+
+## Build from sources
+
+Download the version you are interested in:
+
+```bash
+git clone https://github.com/rtk-rs/ubx2rinex
+```
+
+And build it using cargo:
+
+```bash
+cargo build --all-features -r
+```
+
 ## Licensing
 
 This application is part of the [RTK-rs framework](https://github.com/rtk-rs) which

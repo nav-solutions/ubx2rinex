@@ -22,7 +22,6 @@ impl Cli {
                     .author("Guillaume W. Bres, <guillaume.bressaix@gmail.com>")
                     .version(env!("CARGO_PKG_VERSION"))
                     .about("U-Blox stream to RINEX deserializer")
-                    // .arg_required_else_help(true)
                     .color(ColorChoice::Always)
                     .arg(
                         Arg::new("port")
