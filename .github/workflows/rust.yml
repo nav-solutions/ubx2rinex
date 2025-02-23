@@ -25,3 +25,7 @@ jobs:
       run: cargo build
     - name: Build (All features)
       run: cargo build --all-features
+    - name: Build (All features)
+      run: cargo build --all-features
+    - name: Coding style
+      run: cargo fmt --all -- --check
