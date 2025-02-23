@@ -41,12 +41,42 @@ cargo build --all-features -r
 
 ## Getting started
 
-The most basic deployment consists in connecting to your U-blox and using the default collection
-mode (OBS RINEX Only)
+The most basic deployment consists in connecting to your U-blox to a serial port, 
+defining the UBX Uart port on your device (assuming your USB/UART is connect to the correct interface),
+activating at least one constellation (always required), 
 
 ```bash
-ubx2rinex -p /dev/ttyUSB1
+RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps
+./target/release/ubx2rinex -p /dev/ttyACM0 --gps
+[2025-02-23T10:48:22Z INFO  ubx2rinex] Connected to U-Blox
+[2025-02-23T10:48:22Z DEBUG ubx2rinex] Software version: EXT CORE 3.01 (111141)
+[2025-02-23T10:48:22Z DEBUG ubx2rinex] Firmware version: 00080000
 ```
+
+Not defining any collection option nor selecting a mode of operation, will deploy the default
+behavior, which is Observation RINEX collection, with default options.
+
+Not defining a baud rate value means you are using our 115_200 default value.
+
+In summary, the mandatory flags are:
+- `-p,--port` to define your serial port
+- at least one constellation activation flags, like `--gps`
+- define a specific baud rate if you want
+
+To determine your U-Blox port on linux, for example:
+
+```bash
+dmesg | tail -n 20
+```
+
+<img src="docs/ports-listing.png" alt="Serial Port listing" width="300" />
+
+Follow through this tutorial to understand all the options we offer, especially:
+
+- the application [default behavior](#default-behavior)
+- [U-Blox configuration options](#u-blox-configuration)
+- [select your constellation](#constellation)
+- [Observation RINEX collection](#obs-rinex-collection)
 
 ## Application logs
 
