@@ -1,6 +1,9 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 
-use rinex::prelude::{Constellation, Duration};
+use rinex::{
+    prelude::{Constellation, Duration},
+    production::SnapshotMode,
+};
 
 pub struct Cli {
     /// Arguments passed by user
@@ -25,7 +28,7 @@ impl Cli {
                             .long("port")
                             .value_name("PORT")
                             .required(true)
-                            .help("Define serial port, on your system. Example /dev/ttyUSB0 on Linux")
+                            .help("Define serial port. Example /dev/ttyUSB0 on Linux")
                     )
                     .arg(
                         Arg::new("baudrate")
@@ -40,48 +43,48 @@ impl Cli {
                         Arg::new("gps")
                             .long("gps")
                             .action(ArgAction::SetTrue)
-                            .help("Activate GPS constellation")
+                            .help("Activate GPS constellation (at least one required).")
                             .required_unless_present_any(["galileo", "beidou", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Galileo constellation")
+                            .help("Activate Galileo constellation (at least one required).")
                             .required_unless_present_any(["gps", "beidou", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
-                            .help("Activate BDS (BeiDou) constellation")
+                            .help("Activate BDS (BeiDou) constellation (at least one required).")
                             .required_unless_present_any(["galileo", "gps", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
-                            .help("Activate QZSS constellation")
+                            .help("Activate QZSS constellation (at least one required).")
                             .required_unless_present_any(["galileo", "gps", "bds", "glonass"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Glonass constellation")
+                            .help("Activate Glonass constellation (at least one required).")
                             .required_unless_present_any(["galileo", "gps", "bds", "qzss"]),
                     )
                     .arg(
                         Arg::new("profile")
                             .long("prof")
                             .action(ArgAction::Set)
-                            .help("Define user profile. Default is set to portable!"),
+                            .help("Define user profile. Default is set to \"portable\". This impacts the accuracy!"),
                     )
                     .arg(
-                        Arg::new("nav-clock")
-                            .long("nav-clock")
+                        Arg::new("rx-clock")
+                            .long("rx-clock")
                             .action(ArgAction::SetTrue)
-                            .help("Resolve local clock state. Disabled by default"),
+                            .help("Resolve clock state and capture it. Disabled by default"),
                     )
                     .arg(
                         Arg::new("anti-spoofing")
@@ -89,6 +92,19 @@ impl Cli {
                             .action(ArgAction::SetTrue)
                             .help("Makes sure anti jamming/spoofing is enabled. When enabled, it is automatically emphasized in the collected RINEX."))
                     .next_help_heading("RINEX Collection")
+                    .arg(
+                        Arg::new("prefix")
+                            .long("prefix")
+                            .required(false)
+                            .help("Custom directory prefix for output products. Default is none!"),
+                    )
+                    .arg(
+                        Arg::new("snapshot")
+                            .long("snapshot")
+                            .action(ArgAction::Set)
+                            .required(false)
+                            .help("Define snapshot (=collection) mode")
+                    )
                     .arg(
                         Arg::new("nav")
                             .long("nav")
@@ -101,13 +117,54 @@ impl Cli {
                             .action(ArgAction::SetTrue)
                             .help("Disable Observation RINEX collection. You can use this if you intend to collect Ephemerides only for example"),
                     )
+                    .arg(
+                        Arg::new("v2")
+                            .long("v2")
+                            .action(ArgAction::SetTrue)
+                            .help("Downgrade RINEX revision to V2. You can also upgrade to RINEX V4 with --v4.
+We use V3 by default, because very few tools support V4, so we remain compatible.")
+                    )
+                    .arg(
+                        Arg::new("v4")
+                            .long("v4")
+                            .action(ArgAction::SetTrue)
+                            .help("Upgrade RINEX revision to V4. You can also downgrade to RINEX V2 with --v2.
+We use V3 by default, because very few tools support V4, so we remain compatible.")
+                    )
+                    .arg(
+                        Arg::new("agency")
+                            .long("agency")
+                            .action(ArgAction::Set)
+                            .required(false)
+                            .help("Define name of your Agency, to be used in all Headers"),
+                    )
+                    .arg(
+                        Arg::new("observer")
+                            .long("observer")
+                            .action(ArgAction::Set)
+                            .required(false)
+                            .help("Define name of Observer, to be used in all Headers"),
+                    )
+                    .arg(
+                        Arg::new("operator")
+                            .long("oeprator")
+                            .action(ArgAction::Set)
+                            .required(false)
+                            .help("Define name of Operator, to be used in all Headers"),
+                    )
                     .next_help_heading("Observation collection (signal sampling)")
                     .arg(
                         Arg::new("sampling")
                             .short('s')
                             .long("sampling")
                             .required(false)
-                            .help("Define the sampling interval. Default value is 30s (standard low-rate RINEX).")
+                            .help("Define sampling interval. Default value is 30s (standard low-rate RINEX).")
+                    )
+                    .arg(
+                        Arg::new("crx")
+                            .long("crx")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate CRINEX compression, for optimized RINEX size. Disabled by default."),
                     )
                     .get_matches()
             },
@@ -130,10 +187,6 @@ impl Cli {
             constellations.push(Constellation::Glonass);
         }
         constellations
-    }
-
-    pub fn nav_clock(&self) -> bool {
-        self.matches.get_flag("nav-clock")
     }
 
     /// Returns User serial port specification
@@ -170,6 +223,10 @@ impl Cli {
         self.matches.get_flag("no-obs")
     }
 
+    pub fn rx_clock(&self) -> bool {
+        self.matches.get_flag("rx-clock")
+    }
+
     pub fn nav_rinex(&self) -> bool {
         self.matches.get_flag("nav")
     }
@@ -180,6 +237,30 @@ impl Cli {
 
     pub fn profile(&self) -> Option<&String> {
         self.matches.get_one::<String>("profile")
+    }
+
+    pub fn forced_rinex_v2(&self) -> bool {
+        self.matches.get_flag("v2")
+    }
+
+    pub fn forced_rinex_v4(&self) -> bool {
+        self.matches.get_flag("v4")
+    }
+
+    pub fn crinex(&self) -> bool {
+        self.matches.get_flag("crx")
+    }
+
+    pub fn agency(&self) -> Option<&String> {
+        self.matches.get_one::<String>("agency")
+    }
+
+    pub fn operator(&self) -> Option<&String> {
+        self.matches.get_one::<String>("operator")
+    }
+
+    pub fn observer(&self) -> Option<&String> {
+        self.matches.get_one::<String>("observer")
     }
 
     pub fn sampling(&self) -> Duration {
