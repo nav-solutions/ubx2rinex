@@ -5,10 +5,11 @@ use std::str::FromStr;
 
 use thiserror::Error;
 
-use rinex::navigation::{IonMessage, KbModel, KbRegionCode};
-use rinex::observation::{LliFlags, ObservationData};
-use rinex::prelude::EpochFlag;
 use rinex::prelude::*;
+
+use rinex::prelude::{
+    obs::{EpochFlag, LliFlags},
+};
 
 extern crate gnss_rs as gnss;
 
@@ -58,7 +59,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             error!("failed to parse baud_rate: {}", e);
             9600
-        },
+        }
     };
 
     info!("connecting to {}, baud: {}", port, baud_rate);
@@ -204,7 +205,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 PacketRef::CfgNav5(pkt) => {
                     // Dynamic model
                     let _dyn_model = pkt.dyn_model();
-                },
+                }
                 PacketRef::RxmRawx(pkt) => {
                     let _leap_s = pkt.leap_s();
                     if pkt.rec_stat().intersects(RecStatFlags::CLK_RESET) {
@@ -217,23 +218,23 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         epoch_flag = EpochFlag::CycleSlip;
                     }
                     obs_data.lli = lli;
-                },
+                }
                 PacketRef::MonHw(_pkt) => {
                     //let jamming = pkt.jam_ind(); //TODO
                     //antenna problem:
                     // pkt.a_status();
                     // pkt.a_power();
-                },
+                }
                 PacketRef::MonGnss(_pkt) => {
                     //pkt.supported(); // GNSS
                     //pkt.default(); // GNSS
                     //pkt.enabled(); //GNSS
-                },
+                }
                 PacketRef::MonVer(pkt) => {
                     //UBX revision
                     pkt.software_version();
                     pkt.hardware_version();
-                },
+                }
                 /*
                  * NAVIGATION
                  */
@@ -258,7 +259,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                             //flags.ephemeris_available();
                         }
                     }
-                },
+                }
                 PacketRef::NavTimeUTC(pkt) => {
                     if pkt.valid().intersects(NavTimeUtcFlags::VALID_UTC) {
                         // leap seconds already known
@@ -276,7 +277,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                             epoch = e.unwrap();
                         }
                     }
-                },
+                }
                 PacketRef::NavStatus(pkt) => {
                     itow = pkt.itow();
                     fix_type = pkt.fix_type();
@@ -284,24 +285,24 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     nav_status = pkt.flags2();
                     uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
                     trace!("uptime: {}", uptime);
-                },
+                }
                 PacketRef::NavEoe(pkt) => {
                     itow = pkt.itow();
                     // reset Epoch
                     lli = None;
                     epoch_flag = EpochFlag::default();
-                },
+                }
                 /*
                  * NAVIGATION : EPHEMERIS
                  */
                 PacketRef::MgaGpsEph(pkt) => {
                     let _sv = sv!(&format!("G{}", pkt.sv_id()));
                     //nav_record.insert(epoch, sv);
-                },
+                }
                 PacketRef::MgaGloEph(pkt) => {
                     let _sv = sv!(&format!("R{}", pkt.sv_id()));
                     //nav_record.insert(epoch, sv);
-                },
+                }
                 /*
                  * NAVIGATION: IONOSPHERIC MODELS
                  */
@@ -312,7 +313,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         region: KbRegionCode::default(), // TODO,
                     };
                     let _iono = IonMessage::KlobucharModel(kbmodel);
-                },
+                }
                 /*
                  * OBSERVATION: Receiver Clock
                  */
@@ -321,7 +322,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _drift = pkt.clk_d();
                     // pkt.t_acc(); // phase accuracy
                     // pkt.f_acc(); // frequency accuracy
-                },
+                }
                 /*
                  * Errors, Warnings
                  */
@@ -329,28 +330,28 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(msg) = pkt.message() {
                         trace!("{}", msg);
                     }
-                },
+                }
                 PacketRef::InfDebug(pkt) => {
                     if let Some(msg) = pkt.message() {
                         debug!("{}", msg);
                     }
-                },
+                }
                 PacketRef::InfNotice(pkt) => {
                     if let Some(msg) = pkt.message() {
                         info!("{}", msg);
                     }
-                },
+                }
                 PacketRef::InfError(pkt) => {
                     if let Some(msg) = pkt.message() {
                         error!("{}", msg);
                     }
-                },
+                }
                 PacketRef::InfWarning(pkt) => {
                     if let Some(msg) = pkt.message() {
                         warn!("{}", msg);
                     }
-                },
-                _ => {},
+                }
+                _ => {}
             }
         });
     }
