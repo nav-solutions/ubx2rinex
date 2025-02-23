@@ -27,4 +27,5 @@ ublox = "0.4.5"
 serialport = "4.2"
 
 gnss-rs = { version = "2.3.2", features = ["serde"] }
-rinex = { path = "../rinex", features = ["nav", "obs"] }
+# rinex = { path = "../rinex", features = ["nav", "obs"] }
+rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }
