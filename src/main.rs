@@ -1,39 +1,54 @@
-//! Application to generate RINEX data in standard format
-//! using a Ublox receiver.   
-//! Homepage: <https://github.com/georust/rinex>
-use std::str::FromStr;
+#![doc(html_logo_url = "https://raw.githubusercontent.com/rtk-rs/.github/master/logos/logo2.jpg")]
+#![doc = include_str!("../README.md")]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(clippy::type_complexity)]
+
+/*
+ * UBX2RINEX is part of the rtk-rs framework.
+ * Authors: Guillaume W. Bres <guillaume.bressaix@gmail.com> et al,
+ * (cf. https://github.com/rtk-rs/rinex/graphs/contributors)
+ * (cf. https://github.com/rtk-rs/ubx2rinex/graphs/contributors)
+ * This framework is shipped under Mozilla Public V2 license.
+ *
+ * Documentation: https://github.com/rtk-rs/ubx2rinex
+ */
+
+extern crate gnss_rs as gnss;
+extern crate ublox;
 
 use thiserror::Error;
 
-use rinex::navigation::{IonMessage, KbModel, KbRegionCode};
-use rinex::observation::{LliFlags, ObservationData};
-use rinex::prelude::EpochFlag;
 use rinex::prelude::*;
 
-extern crate gnss_rs as gnss;
+use rinex::prelude::{obs::EpochFlag, Constellation, SV};
 
-use gnss::prelude::SV;
-use gnss::sv;
-
-extern crate ublox;
-use ublox::{
-    CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder, DataBits, InProtoMask,
-    OutProtoMask, PacketRef, Parity, StopBits, UartMode, UartPortId,
-};
-use ublox::{GpsFix, RecStatFlags};
-use ublox::{NavSat, NavTimeUtcFlags};
-use ublox::{NavStatusFlags, NavStatusFlags2};
-
+use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
+
+use ublox::{
+    AlignmentToReferenceTime, GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef,
+    RecStatFlags,
+};
 
 mod cli;
 mod device;
+mod utils;
 
 use cli::Cli;
+use device::Device;
+
+use utils::gnss_id_to_constellation;
+
+#[derive(Debug, Copy, Clone, Default)]
+enum State {
+    #[default]
+    MonVer,
+    MonGnss,
+}
 
 #[derive(Debug, Clone, Error)]
 pub enum Error {
-    #[error("unknown constellation #{0}")]
+    #[error("Unknown constellation id: #{0}")]
     UnknownConstellationId(u8),
 }
 
@@ -47,197 +62,162 @@ fn identify_constellation(id: u8) -> Result<Constellation, Error> {
     }
 }
 
+fn disable_obs_rinex(device: &mut Device) {}
+
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // pretty_env_logger::init();
+
+    let mut builder = Builder::from_default_env();
+    builder
+        .target(Target::Stdout)
+        .format_timestamp_secs()
+        .format_module_path(false)
+        .init();
+
     // cli
     let cli = Cli::new();
 
-    // Device configuration
-    let port = cli.port();
-    let baud_rate = match cli.baudrate() {
-        Ok(b) => b,
-        Err(e) => {
-            error!("failed to parse baud_rate: {}", e);
-            9600
-        },
-    };
-
-    info!("connecting to {}, baud: {}", port, baud_rate);
-
-    // open device
-    let port = serialport::new(port.clone(), baud_rate)
-        .open()
-        .unwrap_or_else(|_| panic!("failed to open serial port \"{}\"", port));
-    let mut device = device::Device::new(port);
-
-    // Enable UBX protocol on all ports
-    // so User can connect to all of them
-    device.write_all(
-        &CfgPrtUartBuilder {
-            portid: UartPortId::Uart1,
-            reserved0: 0,
-            tx_ready: 0,
-            mode: UartMode::new(DataBits::Eight, Parity::None, StopBits::One),
-            baud_rate,
-            in_proto_mask: InProtoMask::all(),
-            out_proto_mask: OutProtoMask::UBLOX,
-            flags: 0,
-            reserved5: 0,
-        }
-        .into_packet_bytes(),
-    )?;
-    device.wait_for_ack::<CfgPrtUart>().unwrap();
-
-    /*
-     * HEADER <=> Configuration
-     */
-    //CfgNav5 : model, dynamics..
-    //CfgNav5X : min_svs, aiding, wkn, ppp..
-    //AidIni
-
-    /* NEED UBX CRATE UPDATE!!
-    device.write_all(
-        &CfgPrtUartBuilder {
-            portid: UartPortId::Uart2,
-            reserved0: 0,
-            tx_ready: 0,
-            mode: UartMode::new(DataBits::Eight, Parity::None, StopBits::One),
-            baud_rate: baud,
-            in_proto_mask: InProtoMask::all(),
-            out_proto_mask: OutProtoMask::UBLOX,
-            flags: 0,
-            reserved5: 0,
-        }
-        .into_packet_bytes(),
-    )?;
-    device.wait_for_ack::<CfgPrtUart>().unwrap();
-    */
-
-    /* NEED UBX CRATE UPDATE!!
-    device.write_all(
-        &CfgPrtUartBuilder {
-            portid: UartPortId::Usb,
-            reserved0: 0,
-            tx_ready: 0,
-            mode: UartMode::new(DataBits::Eight, Parity::None, StopBits::One),
-            baud_rate: baud,
-            in_proto_mask: InProtoMask::all(),
-            out_proto_mask: OutProtoMask::UBLOX,
-            flags: 0,
-            reserved5: 0,
-        }
-        .into_packet_bytes(),
-    )?;
-    device.wait_for_ack::<CfgPrtUart>().unwrap();
-    */
-
-    ///////////////////////
-    // Observation opmode
-    ///////////////////////
-    device
-        .write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<NavSat>([0, 1, 0, 0, 0, 0]).into_packet_bytes(),
-        )
-        .unwrap();
-    device.wait_for_ack::<CfgMsgAllPorts>().unwrap();
-
-    ///////////////////////
-    // Navigation opmode
-    ///////////////////////
-    // Enable GPS Ephemeris + GPS Iono
-
-    /* NEED UBX Crate update!!
-    device
-        .write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<MgaGpsEph>([0, 1, 0, 0, 0, 0])
-                .into_packet_bytes(),
-        )
-        .unwrap();
-    device.wait_for_ack::<CfgMsgAllPorts>().unwrap();
-    device
-        .write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<MgaGpsEph>([0, 1, 0, 0, 0, 0])
-                .into_packet_bytes(),
-        )
-        .unwrap();
-    device.wait_for_ack::<CfgMsgAllPorts>().unwrap();
-    */
-
-    // Create header section
-    let mut _nav_header = Header::basic_nav();
-    let mut _obs_header = Header::basic_obs();
-    // let mut clk_header = Header::basic_clk();
-
-    //TODO header CLI customization
-
-    // current work structures
-    let mut itow = 0_u32;
-    let mut epoch = Epoch::default();
-    let mut epoch_flag = EpochFlag::default();
-
-    // observation
-    let mut _observable = Observable::default();
-    let mut lli: Option<LliFlags> = None;
-    let mut obs_data = ObservationData::default();
+    // init
+    let state = State::default();
+    let mut buffer = [0; 8192];
 
     let mut uptime = Duration::default();
-
     let mut fix_type = GpsFix::NoFix; // current fix status
     let mut fix_flags = NavStatusFlags::empty(); // current fix flag
     let mut nav_status = NavStatusFlags2::Inactive;
 
+    // Serial port settings
+    let port = cli.port();
+    let baud_rate = cli.baud_rate().unwrap_or(115_200);
+
+    // U-Blox setup
+    let nav_clock = cli.nav_clock();
+    let sampling = cli.sampling();
+    let anti_spoofing = cli.anti_spoofing();
+
+    let profile = match cli.profile() {
+        Some(profile) => profile.to_string(),
+        _ => "portable".to_string(),
+    };
+
+    // RINEX collection options
+    let nav_rinex = cli.nav_rinex();
+    let no_obs_rinex = cli.no_obs_rinex();
+    let constellations = cli.constellations();
+
+    let mut _obs_header = Header::basic_obs();
+    let mut itow = 0_u32;
+    let mut epoch = Epoch::default();
+    let mut epoch_flag = EpochFlag::default();
+
+    // open device
+    let mut device = Device::open(port, baud_rate, &mut buffer);
+
+    // Device configurations
+
+    device
+        .read_version(&mut buffer)
+        .unwrap_or_else(|e| panic!("Failed to read firmware version: {}", e));
+
+    device
+        .read_gnss(&mut buffer)
+        .unwrap_or_else(|e| panic!("Failed to read GNSS constellations: {}", e));
+
+    device.enable_nav_eoe(&mut buffer);
+    debug!("UBX-NAV-EOE enabled");
+
+    device.enable_nav_pvt(&mut buffer);
+    debug!("UBX-NAV-PVT enabled");
+
+    if nav_clock {
+        device.enable_nav_clock(&mut buffer);
+        debug!("UBX-NAV-CLK enabled");
+    }
+
+    device.enable_nav_sat(&mut buffer);
+    debug!("UBX-NAV-PVT enabled");
+
+    let measure_rate_ms = (sampling.total_nanoseconds() / 1_000_000) as u16;
+
+    let nav_solutions_ratio = if measure_rate_ms > 10_000 {
+        1
+    } else if measure_rate_ms > 1_000 {
+        2
+    } else {
+        10
+    };
+
+    let time_ref = AlignmentToReferenceTime::Gps;
+
+    device.apply_cfg_rate(&mut buffer, measure_rate_ms, nav_solutions_ratio, time_ref);
+    debug!("Measurement rate is {} ({:?})", sampling, time_ref);
+
+    if no_obs_rinex {
+    } else {
+        device.enable_obs_rinex(&mut buffer);
+        info!("Observation RINEX mode deployed");
+    }
+
     loop {
-        // main loop
-        let _ = device.update(|packet| {
+        let _ = device.consume_all_cb(&mut buffer, |packet| {
             match packet {
-                /*
-                 * Configuration frames:
-                 * should be depiceted by HEADER section
-                 */
-                //PacketRef::CfgRate(pkt) => {
-                //    //TODO EPOCH INTERVAL
-                //    let gps_rate = pkt.measure_rate_ms();
-                //    //TODO EPOCH INTERVAL
-                //    let nav_rate = pkt.nav_rate();
-                //    //TODO reference time
-                //    let time = pkt.time_ref();
-                //},
                 PacketRef::CfgNav5(pkt) => {
                     // Dynamic model
                     let _dyn_model = pkt.dyn_model();
                 },
                 PacketRef::RxmRawx(pkt) => {
-                    let _leap_s = pkt.leap_s();
-                    if pkt.rec_stat().intersects(RecStatFlags::CLK_RESET) {
-                        // notify reset event
-                        if let Some(ref mut lli) = lli {
-                            *lli |= LliFlags::LOCK_LOSS;
-                        } else {
-                            lli = Some(LliFlags::LOCK_LOSS);
-                        }
-                        epoch_flag = EpochFlag::CycleSlip;
+                    debug!("rxm-rawx: {}", pkt.leap_s());
+                    let tow = pkt.rcv_tow();
+                    let stat = pkt.rec_stat();
+
+                    if stat.intersects(RecStatFlags::CLK_RESET) {
+                        error!("clock reset!");
+                        warn!("considering phase cycle slip");
                     }
-                    obs_data.lli = lli;
+
+                    for meas in pkt.measurements() {
+                        let pr = meas.pr_mes();
+                        let _pr_stddev = meas.pr_stdev();
+
+                        let cp = meas.cp_mes();
+                        let _cp_stddev = meas.cp_stdev();
+
+                        let dop = meas.do_mes();
+                        let _dop_stddev = meas.do_stdev();
+
+                        // let freq_id = meas.freq_id();
+                        let gnss_id = meas.gnss_id();
+
+                        let constell = gnss_id_to_constellation(gnss_id);
+                        if constell.is_none() {
+                            debug!("unknown constellation: #{}", gnss_id);
+                            continue;
+                        }
+
+                        let constell = constell.unwrap();
+
+                        let prn = meas.sv_id();
+                        let sv = SV::new(constell, prn);
+
+                        let cno = meas.cno();
+                        trace!(
+                            "{} (RAWX) - pr={:.7E} cp={:.7E} dop={:.7E} cno={}",
+                            sv,
+                            pr,
+                            cp,
+                            dop,
+                            cno
+                        );
+                    }
                 },
                 PacketRef::MonHw(_pkt) => {
                     //let jamming = pkt.jam_ind(); //TODO
                     //antenna problem:
                     // pkt.a_status();
-                    // pkt.a_power();
+                    //
                 },
-                PacketRef::MonGnss(_pkt) => {
-                    //pkt.supported(); // GNSS
-                    //pkt.default(); // GNSS
-                    //pkt.enabled(); //GNSS
-                },
-                PacketRef::MonVer(pkt) => {
-                    //UBX revision
-                    pkt.software_version();
-                    pkt.hardware_version();
-                },
-                /*
-                 * NAVIGATION
-                 */
                 PacketRef::NavSat(pkt) => {
+                    debug!("nav-sat: {:?}", pkt);
                     for sv in pkt.svs() {
                         let gnss = identify_constellation(sv.gnss_id());
                         if gnss.is_ok() {
@@ -285,33 +265,37 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
                     trace!("uptime: {}", uptime);
                 },
+                PacketRef::NavClock(pkt) => {
+                    debug!("NAV CLK: {:?}", pkt);
+                },
                 PacketRef::NavEoe(pkt) => {
                     itow = pkt.itow();
                     // reset Epoch
-                    lli = None;
+                    // lli = None;
                     epoch_flag = EpochFlag::default();
+                    debug!("EOE | itow = {}", itow);
                 },
-                /*
-                 * NAVIGATION : EPHEMERIS
-                 */
+                PacketRef::NavPvt(pkt) => {
+                    debug!("NAV PVT: {:?}", pkt);
+                },
                 PacketRef::MgaGpsEph(pkt) => {
-                    let _sv = sv!(&format!("G{}", pkt.sv_id()));
+                    // let _sv = sv!(&format!("G{}", pkt.sv_id()));
                     //nav_record.insert(epoch, sv);
                 },
                 PacketRef::MgaGloEph(pkt) => {
-                    let _sv = sv!(&format!("R{}", pkt.sv_id()));
+                    // let _sv = sv!(&format!("R{}", pkt.sv_id()));
                     //nav_record.insert(epoch, sv);
                 },
                 /*
                  * NAVIGATION: IONOSPHERIC MODELS
                  */
                 PacketRef::MgaGpsIono(pkt) => {
-                    let kbmodel = KbModel {
-                        alpha: (pkt.alpha0(), pkt.alpha1(), pkt.alpha2(), pkt.alpha3()),
-                        beta: (pkt.beta0(), pkt.beta1(), pkt.beta2(), pkt.beta3()),
-                        region: KbRegionCode::default(), // TODO,
-                    };
-                    let _iono = IonMessage::KlobucharModel(kbmodel);
+                    // let kbmodel = KbModel {
+                    //     alpha: (pkt.alpha0(), pkt.alpha1(), pkt.alpha2(), pkt.alpha3()),
+                    //     beta: (pkt.beta0(), pkt.beta1(), pkt.beta2(), pkt.beta3()),
+                    //     region: KbRegionCode::default(), // TODO,
+                    // };
+                    // let _iono = IonMessage::KlobucharModel(kbmodel);
                 },
                 /*
                  * OBSERVATION: Receiver Clock
@@ -350,9 +334,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         warn!("{}", msg);
                     }
                 },
-                _ => {},
+                pkt => {
+                    warn!("main: {:?}", pkt);
+                }, // unused
             }
         });
-    }
-    //Ok(())
+
+        match state {
+            State::MonVer => {},
+            State::MonGnss => {},
+        }
+    } // loop
 }
