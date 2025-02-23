@@ -1,8 +1,8 @@
 use ublox::{
-    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart,
-    CfgPrtUartBuilder, CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonGnss, MonVer, NavClock, NavEoe, NavPvt, NavSat, OutProtoMask, PacketRef, Parity,
-    Parser, RxmRawx, StopBits, UartMode, UartPortId, UbxPacketMeta,
-    UbxPacketRequest,
+    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
+    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonGnss, MonVer, NavClock, NavEoe, NavPvt,
+    NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
+    UbxPacketMeta, UbxPacketRequest,
 };
 
 use serialport::SerialPort;
@@ -120,10 +120,12 @@ impl Device {
         let mut packet_found = false;
 
         while !packet_found {
-            self.consume_all_cb(buffer, |packet| if let PacketRef::MonVer(pkt) = packet {
-                debug!("U-Blox Software version: {}", pkt.software_version());
-                debug!("U-Blox Firmware version: {}", pkt.hardware_version());
-                packet_found = true;
+            self.consume_all_cb(buffer, |packet| {
+                if let PacketRef::MonVer(pkt) = packet {
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", pkt.hardware_version());
+                    packet_found = true;
+                }
             })?;
         }
         Ok(())
@@ -220,16 +222,18 @@ impl Device {
 
         let mut packet_found = false;
         while !packet_found {
-            self.consume_all_cb(buffer, |packet| if let PacketRef::MonGnss(pkt) = packet {
-                info!(
-                    "Enabled constellations: {}",
-                    constell_mask_to_string(pkt.enabled())
-                );
-                info!(
-                    "Supported constellations: {}",
-                    constell_mask_to_string(pkt.supported())
-                );
-                packet_found = true;
+            self.consume_all_cb(buffer, |packet| {
+                if let PacketRef::MonGnss(pkt) = packet {
+                    info!(
+                        "Enabled constellations: {}",
+                        constell_mask_to_string(pkt.enabled())
+                    );
+                    info!(
+                        "Supported constellations: {}",
+                        constell_mask_to_string(pkt.supported())
+                    );
+                    packet_found = true;
+                }
             })?;
         }
         Ok(())

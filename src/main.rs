@@ -20,17 +20,14 @@ use thiserror::Error;
 
 use rinex::prelude::*;
 
-use rinex::prelude::{
-        obs::EpochFlag,
-        Constellation, SV,
-    };
+use rinex::prelude::{obs::EpochFlag, Constellation, SV};
 
 use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
 
 use ublox::{
-    AlignmentToReferenceTime, GpsFix, NavStatusFlags,
-    NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags,
+    AlignmentToReferenceTime, GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef,
+    RecStatFlags,
 };
 
 mod cli;
