@@ -1,6 +1,6 @@
 use ublox::MonGnssConstellMask;
 
-use rinex::prelude::{Constellation, Observable};
+use rinex::prelude::Constellation;
 
 pub fn constell_mask_to_string(mask: MonGnssConstellMask) -> String {
     let mut string = String::with_capacity(16);
@@ -30,7 +30,7 @@ pub fn constellations_to_mask(constellations: &[Constellation]) -> MonGnssConste
         mask |= MonGnssConstellMask::GAL;
     }
 
-    if constellations.contains((&Constellation::BeiDou)) {
+    if constellations.contains(&Constellation::BeiDou) {
         mask |= MonGnssConstellMask::BDC;
     }
 

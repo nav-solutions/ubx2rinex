@@ -20,22 +20,17 @@ use thiserror::Error;
 
 use rinex::prelude::*;
 
-use rinex::{
-    prelude::{
-        obs::{EpochFlag, LliFlags},
+use rinex::prelude::{
+        obs::EpochFlag,
         Constellation, SV,
-    },
-    production::SnapshotMode,
-};
+    };
 
 use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
 
 use ublox::{
-    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    DataBits, GpsFix, InProtoMask, MonGnss, MonGnssRef, MonVer, NavSat, NavStatusFlags,
-    NavStatusFlags2, NavTimeUtcFlags, OutProtoMask, PacketRef, Parity, RecStatFlags, StopBits,
-    UartMode, UartPortId, UbxPacketRequest,
+    AlignmentToReferenceTime, GpsFix, NavStatusFlags,
+    NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags,
 };
 
 mod cli;
@@ -45,7 +40,7 @@ mod utils;
 use cli::Cli;
 use device::Device;
 
-use utils::{constell_mask_to_string, gnss_id_to_constellation};
+use utils::gnss_id_to_constellation;
 
 #[derive(Debug, Copy, Clone, Default)]
 enum State {
@@ -86,7 +81,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::new();
 
     // init
-    let mut state = State::default();
+    let state = State::default();
     let mut buffer = [0; 8192];
 
     let mut uptime = Duration::default();
@@ -119,7 +114,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut epoch_flag = EpochFlag::default();
 
     // open device
-    let mut device = Device::open(&port, baud_rate, &mut buffer);
+    let mut device = Device::open(port, baud_rate, &mut buffer);
 
     // Device configurations
 

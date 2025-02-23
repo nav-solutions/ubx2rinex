@@ -1,4 +1,4 @@
-use clap::{value_parser, Arg, ArgAction, ArgMatches, ColorChoice, Command};
+use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 
 use rinex::prelude::{Constellation, Duration};
 
