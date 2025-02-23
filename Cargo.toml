@@ -6,20 +6,24 @@ authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "U-Blox to RINEX deserializer"
 homepage = "https://github.com/rtk-rs"
 repository = "https://github.com/rtk-rs/ubx2rinex"
-keywords = ["gnss", "gps", "rinex"]
+keywords = ["gnss", "gps", "geo"]
 categories = ["science", "science::geo", "command-line-interface", "command-line-utilities"]
 edition = "2021"
 readme = "README.md"
 
 [dependencies]
+thiserror = "2"
+chrono = "0.4.30"
+
 log = "0.4"
 pretty_env_logger = "0.5"
-chrono = "0.4.30"
-serde = "1"
-thiserror = "2"
-serde_json = "1"
-serialport = "4.2.0"
-ublox = "0.4.4"
-gnss-rs = { version = "2.3.2", features = ["serde"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
-rinex = { version = "=0.17.0-alpha-3", features = ["serde", "nav", "obs", "clock"] }
+
+serde = "1"
+serde_json = "1"
+
+ublox = "0.4.4"
+serialport = "4.2.0"
+
+gnss-rs = { version = "2.3.2", features = ["serde"] }
+rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }
