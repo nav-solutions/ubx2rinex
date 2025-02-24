@@ -1,6 +1,16 @@
-use ublox::MonGnssConstellMask;
+use ublox::{AlignmentToReferenceTime, MonGnssConstellMask};
 
-use rinex::prelude::Constellation;
+use rinex::prelude::{Constellation, TimeScale};
+
+pub fn to_timescale(t_ref: AlignmentToReferenceTime) -> TimeScale {
+    match t_ref {
+        AlignmentToReferenceTime::Bds => TimeScale::BDT,
+        AlignmentToReferenceTime::Gal => TimeScale::GST,
+        AlignmentToReferenceTime::Gps => TimeScale::GPST,
+        AlignmentToReferenceTime::Utc => TimeScale::UTC,
+        AlignmentToReferenceTime::Glo => panic!("GlonassT is not supported yet!"),
+    }
+}
 
 pub fn constell_mask_to_string(mask: MonGnssConstellMask) -> String {
     let mut string = String::with_capacity(16);

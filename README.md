@@ -120,10 +120,19 @@ TODO
 
 TODO
 
-OBS RINEX Collection
-====================
+RINEX Collection
+================
+
+`ubx2rinex` is a collecter, in the sense that it gathers a real-time stream from your u-Blox,
+and dumps it into supported RINEX formats. It is important to keep in mind that, in order to format
+a meaningful (and correct) RINEX header, we can only redact it after completion of a first entire epoch,
+every time a new gathering period starts.
+
+Signal Collection
+=================
 
 The default `ubx2rinex` collection mode is Observation RINEX collection.  
+
 Using this mode, you can use your U-Blox as a real-time signal source (sampler)
 which is then collected as [Receiver Independent EXchange](https://github.com/rtk-rs/rinex)
 for distribution, post processing and much more. The default RINEX format garantees 17 digits 
@@ -138,18 +147,50 @@ use the `--no-obs` flag, which will turn this collection option.
 not UTC. 
 
 `ubx2rinex` is smart, it will adapt the main Timescale to [your Constellation choices](#Constellation).
-NB: we use GPS only by default (for simplicity).
 
-Since Observation RINEX collection is the default mode of this tool, the default timescale is therefore GPS time.
-
-Snapshot and collecting options
+Receiver clock state collection
 ===============================
 
-Since we're collecting a real-time stream, it is important to define how we collect the data.  
+Observation RINEX allows describing the receiver clock state with 14 digits precision.  
+This is optional and disabled by default. If you are interested in capturing and distributing your local
+clock state, you should turn activate this option with `--rx-clock`.
 
-`ubx2rinex` default collecting option is Standardized RINEX. Standard RINEX files
-are published on a daily basis, they last 24 hours, use a 30s sampling interval. That means
+Sampling period
+===============
+
+When collecting signal observations, it is important to define your sampling period. The default sampling period is set to 30s, which is compatible with standard Observation RINEX publications.
+
+You can use any custom value above 50ms. 
+
+In this example, we reduce the sampling period to 1s:
+
+```bash
+ubx2rinex -p /dev/ttyACM0 \
+          --gps \
+          -s "1 s"
+```
+
+Snapshot period
+===============
+
+The snapshot period defines how often we release a RINEX of each kind.
+When the snapshot is being released, the file handled is released and the file is ready to be distributed or post processed.
+
+By default, the snapshot period is set to Daily, which is compatible with standard RINEX publications.  
+
+Several options exist (you can only select one at once):
+
+- `--hourly` for Hourly RINEX publication
+- `--quarterly` for one publication every 6 hours
+- `--noon` for one publication every 12 hours
+- `--custom $dt` for custom publication period. Every valid `Duration` description may apply. For example, these are all valid durations: `--period  
+
+NB: 
 
 - the first signal observation is released everyday at midnight 00:00:00 in the main Timescale
 - the last signal observation is released everyday at 23:59:30 in the main Timescale
 
+Snapshot period interruption
+============================
+
+`ubx2rinex` does not support graceful interruption. If you abort the ongoing period by killing this program, you may wind-up with an incomplete epoch at the very end.

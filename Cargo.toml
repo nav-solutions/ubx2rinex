@@ -13,7 +13,7 @@ readme = "README.md"
 
 [dependencies]
 thiserror = "2"
-chrono = "0.4.30"
+itertools = "0.14"
 
 log = "0.4"
 env_logger = "0.11"
@@ -27,4 +27,5 @@ ublox = "0.4.5"
 serialport = "4.2"
 
 gnss-rs = { version = "2.3.2", features = ["serde"] }
+# rinex = { path = "../rinex", features = ["nav", "obs"] }
 rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }
