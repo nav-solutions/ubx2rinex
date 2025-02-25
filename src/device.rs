@@ -5,11 +5,14 @@ use ublox::{
     UbxPacketMeta, UbxPacketRequest,
 };
 
+use rinex::hardware::Receiver;
+
 use serialport::SerialPort;
+use std::time::Duration;
 
 use crate::utils::constell_mask_to_string;
+
 use log::{debug, error, info};
-use std::time::Duration;
 
 pub struct Device {
     pub port: Box<dyn SerialPort>,
@@ -113,7 +116,7 @@ impl Device {
         Ok(())
     }
 
-    pub fn read_version(&mut self, buffer: &mut [u8]) -> std::io::Result<()> {
+    pub fn read_version(&mut self, buffer: &mut [u8], rcvr: &mut Receiver) -> std::io::Result<()> {
         self.write_all(&UbxPacketRequest::request_for::<MonVer>().into_packet_bytes())
             .unwrap_or_else(|e| panic!("Failed to request firmware version: {}", e));
 
@@ -122,8 +125,10 @@ impl Device {
         while !packet_found {
             self.consume_all_cb(buffer, |packet| {
                 if let PacketRef::MonVer(pkt) = packet {
+                    let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());
-                    debug!("U-Blox Firmware version: {}", pkt.hardware_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+                    rcvr.firmware = firmware.to_string();
                     packet_found = true;
                 }
             })?;

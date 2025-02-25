@@ -21,6 +21,7 @@ use thiserror::Error;
 use std::str::FromStr;
 
 use rinex::{
+    hardware::Receiver,
     hatanaka::CRINEX,
     observation::HeaderFields as ObsHeader,
     prelude::{Constellation, Duration, Epoch, Header, Observable, Rinex, TimeScale, Version, SV},
@@ -124,8 +125,23 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         3
     };
 
+    let mut rcvr = cli.receiver();
+
+    // Open device
+    let mut device = Device::open(port, baud_rate, &mut buffer);
+
+    // Device configurations
+    device
+        .read_version(&mut buffer, &mut rcvr)
+        .unwrap_or_else(|e| panic!("Failed to read firmware version: {}", e));
+
+    device
+        .read_gnss(&mut buffer)
+        .unwrap_or_else(|e| panic!("Failed to read GNSS constellations: {}", e));
+
     let mut header = Header::default()
         .with_version(Version::new(major, 0))
+        .with_receiver(rcvr)
         .with_constellation(constellation);
 
     if let Some(agency) = cli.agency() {
@@ -167,20 +183,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     }
-
-    header.rcvr = Some(cli.receiver());
-
-    // Open device
-    let mut device = Device::open(port, baud_rate, &mut buffer);
-
-    // Device configurations
-    device
-        .read_version(&mut buffer)
-        .unwrap_or_else(|e| panic!("Failed to read firmware version: {}", e));
-
-    device
-        .read_gnss(&mut buffer)
-        .unwrap_or_else(|e| panic!("Failed to read GNSS constellations: {}", e));
 
     device.enable_nav_eoe(&mut buffer);
     debug!("UBX-NAV-EOE enabled");

@@ -192,6 +192,9 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         if self.bds() {
             constellations.push(Constellation::BeiDou);
         }
+        if self.qzss() {
+            constellations.push(Constellation::QZSS);
+        }
         if self.glonass() {
             constellations.push(Constellation::Glonass);
         }

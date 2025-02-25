@@ -63,6 +63,21 @@ impl Collecter {
 
     /// Release (publish) file header
     fn release_header<W: Write>(&mut self, w: &mut BufWriter<W>) {
+        // trick to render a meaningful file name (using RINEX V0.17)
+        let rec = self
+            .rinex
+            .record
+            .as_mut_obs()
+            .expect("internal error while release Header");
+
+        rec.insert(
+            ObsKey {
+                epoch: self.t,
+                flag: EpochFlag::Ok,
+            },
+            Default::default(),
+        );
+
         // last header customizations
         let constellations = self
             .buf
@@ -106,27 +121,24 @@ impl Collecter {
         // not optimized.. generate only once please
         let filename = self.rinex.standard_filename(true, None, None);
 
-        let fd = if self.release_header {
-            File::create(&filename)
-                .unwrap_or_else(|e| panic!("Failed to create new observation file: {}", e))
-        } else {
-            let mut fd = OpenOptions::new()
-                .write(true)
-                .read(true)
-                .open(&filename)
-                .unwrap_or_else(|e| panic!("Failed to append to file: {}", e));
+        debug!("Filename: \"{}\"", filename);
 
-            fd.seek(SeekFrom::End(0))
-                .unwrap_or_else(|e| panic!("Failed to append to file: {}", e));
+        let mut writer = match OpenOptions::new().write(true).read(true).open(&filename) {
+            Ok(mut fd) => {
+                fd.seek(SeekFrom::End(0))
+                    .unwrap_or_else(|e| panic!("Failed to append to file: {}", e));
 
-            fd
+                BufWriter::new(fd)
+            },
+            Err(e) => {
+                let mut fd = File::create(&filename)
+                    .unwrap_or_else(|e| panic!("Header release: failed to create file: {}", e));
+
+                let mut writer = BufWriter::new(fd);
+                self.release_header(&mut writer);
+                writer
+            },
         };
-
-        let mut writer = BufWriter::new(fd);
-
-        if self.release_header {
-            self.release_header(&mut writer);
-        }
 
         let key = ObsKey {
             epoch: self.t,
@@ -166,9 +178,23 @@ impl Collecter {
             self.t = t;
         }
 
-        let c1c = Observable::from_str("C1C").unwrap();
-        let l1c = Observable::from_str("L1C").unwrap();
-        let d1c = Observable::from_str("D1C").unwrap();
+        let c1c = if self.major == 3 {
+            Observable::from_str("C1C").unwrap()
+        } else {
+            Observable::from_str("C1").unwrap()
+        };
+
+        let l1c = if self.major == 3 {
+            Observable::from_str("L1C").unwrap()
+        } else {
+            Observable::from_str("L1").unwrap()
+        };
+
+        let d1c = if self.major == 3 {
+            Observable::from_str("D1C").unwrap()
+        } else {
+            Observable::from_str("D1").unwrap()
+        };
 
         //if let Some(carrier) = freq_id_to_carrier(sv.constellation, freq_id) {
         //    if let Some(observable) = Observable::from_carrier(sv.constellation, carrier) {
