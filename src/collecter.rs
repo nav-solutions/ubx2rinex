@@ -221,7 +221,5 @@ impl Collecter {
             value: rawxm.dop as f64,
             observable: d1c,
         });
-        //   }
-        //}
     }
 }
