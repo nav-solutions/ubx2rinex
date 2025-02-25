@@ -219,12 +219,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Observation RINEX mode deployed");
     }
 
-    let filename = Rinex::basic_obs()
-        .with_header(header.clone())
-        .standard_filename(major == 2, None, None);
+    let rinex = Rinex::basic_obs().with_header(header);
 
     let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(t, header, &filename);
+    let mut collecter = Collecter::new(t, rinex);
 
     info!("{} - program deployed", t);
     loop {
@@ -272,7 +270,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let sv = SV::new(constell, prn);
 
                         let rawxm = Rawxm::new(pr, cp, dop, cno);
-                        collecter.new_observation(t, sv, rawxm);
+                        collecter.new_observation(t, sv, 0, rawxm);
                     }
                 },
                 PacketRef::MonHw(_pkt) => {
