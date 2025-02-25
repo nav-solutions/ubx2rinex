@@ -23,7 +23,7 @@ use std::str::FromStr;
 use rinex::{
     hatanaka::CRINEX,
     observation::HeaderFields as ObsHeader,
-    prelude::{Constellation, Duration, Epoch, Header, Observable, TimeScale, Version, SV},
+    prelude::{Constellation, Duration, Epoch, Header, Observable, Rinex, TimeScale, Version, SV},
 };
 
 use env_logger::{Builder, Target};
@@ -168,6 +168,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    header.rcvr = Some(cli.receiver());
+
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
@@ -217,8 +219,12 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Observation RINEX mode deployed");
     }
 
+    let filename = Rinex::basic_obs()
+        .with_header(header.clone())
+        .standard_filename(major == 2, None, None);
+
     let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(t, header);
+    let mut collecter = Collecter::new(t, header, &filename);
 
     info!("{} - program deployed", t);
     loop {

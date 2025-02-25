@@ -1,6 +1,7 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 
 use rinex::{
+    hardware::Receiver,
     prelude::{Constellation, Duration},
     production::SnapshotMode,
 };
@@ -37,6 +38,14 @@ impl Cli {
                             .required(false)
                             .value_name("Baudrate (u32)")
                             .help("Define serial port baud rate. Communications will not work if your U-Blox streams at a different data-rate. By default we use 115_200"),
+                    )
+                    .arg(
+                        Arg::new("model")
+                            .short('m')
+                            .long("model")
+                            .required(false)
+                            .value_name("Model")
+                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
                     )
                     .next_help_heading("U-Blox configuration")
                     .arg(
@@ -147,7 +156,7 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                     )
                     .arg(
                         Arg::new("operator")
-                            .long("oeprator")
+                            .long("operator")
                             .action(ArgAction::Set)
                             .required(false)
                             .help("Define name of Operator, to be used in all Headers"),
@@ -261,6 +270,22 @@ We use V3 by default, because very few tools support V4, so we remain compatible
 
     pub fn observer(&self) -> Option<&String> {
         self.matches.get_one::<String>("observer")
+    }
+
+    fn rx_model(&self) -> String {
+        if let Some(model) = self.matches.get_one::<String>("model") {
+            model.to_string()
+        } else {
+            "".to_string()
+        }
+    }
+
+    pub fn receiver(&self) -> Receiver {
+        Receiver {
+            sn: "".to_string(),
+            model: self.rx_model(),
+            firmware: "".to_string(),
+        }
     }
 
     pub fn sampling(&self) -> Duration {

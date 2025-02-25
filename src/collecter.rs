@@ -12,7 +12,7 @@ use rinex::{
     observation::HeaderFields as ObsHeader,
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Epoch, Header, Observable, SV,
+        Epoch, Header, Observable, Rinex, SV,
     },
 };
 
@@ -41,7 +41,7 @@ impl Rawxm {
 
 pub struct Collecter {
     t: Epoch,
-    dump_header: bool,
+    new_period: bool,
     header: Header,
     obs_header: ObsHeader,
     obs_fd: BufWriter<File>,
@@ -49,7 +49,7 @@ pub struct Collecter {
 }
 
 impl Collecter {
-    pub fn new(t0: Epoch, header: Header) -> Self {
+    pub fn new(t0: Epoch, header: Header, filename: &str) -> Self {
         let obs_header = header
             .obs
             .as_ref()
@@ -60,9 +60,9 @@ impl Collecter {
             t: t0,
             header,
             obs_header,
-            dump_header: true,
+            new_period: true,
             obs_fd: {
-                let fd = File::create("test.rnx")
+                let fd = File::create(filename)
                     .unwrap_or_else(|e| panic!("failed to create observation file: {}", e));
                 BufWriter::new(fd)
             },
@@ -76,7 +76,7 @@ impl Collecter {
             trace!("{} - NEW EPOCH - ({} RAWX) - {}", t, sv, rawxm);
 
             if self.obs_buf.signals.len() > 0 || self.obs_buf.clock.is_some() {
-                if self.dump_header {
+                if self.new_period {
                     let constellations = self
                         .obs_buf
                         .signals
@@ -109,6 +109,15 @@ impl Collecter {
                         }
                     }
 
+                    let filename = Rinex::basic_obs()
+                        .with_header(self.header.clone())
+                        .standard_filename(self.header.version.major == 2, None, None);
+
+                    self.obs_fd =
+                        BufWriter::new(File::create(filename).unwrap_or_else(|e| {
+                            panic!("failed to create observation file: {}", e)
+                        }));
+
                     self.header.format(&mut self.obs_fd).unwrap_or_else(|e| {
                         panic!(
                             "Failed to dump RINEX header: {}. Aborting, avoiding corrupt RINEX",
@@ -116,7 +125,7 @@ impl Collecter {
                         )
                     });
 
-                    self.dump_header = false;
+                    self.new_period = false;
                 }
 
                 let key = ObsKey {
