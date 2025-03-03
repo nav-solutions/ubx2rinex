@@ -119,6 +119,12 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let forced_v2 = cli.forced_rinex_v2();
     let forced_v4 = cli.forced_rinex_v4();
 
+    let prefix = if let Some(prefix) = cli.prefix() {
+        prefix.to_string()
+    } else {
+        "".to_string()
+    };
+
     let major = if forced_v4 {
         4
     } else if forced_v2 {
@@ -226,7 +232,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rinex = Rinex::basic_obs().with_header(header);
 
     let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(t, rinex, crinex, false);
+    let mut collecter = Collecter::new(&prefix, t, rinex, crinex, false);
 
     info!("{} - program deployed", t);
     loop {

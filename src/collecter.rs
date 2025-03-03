@@ -43,6 +43,7 @@ impl Rawxm {
 
 pub struct Collecter {
     t: Epoch,
+    prefix: String,
     major: u8,
     gzip: bool,
     crinex: bool,
@@ -54,7 +55,7 @@ pub struct Collecter {
 
 impl Collecter {
     /// Builds new [Collecter]
-    pub fn new(t0: Epoch, rinex: Rinex, crinex: bool, gzip: bool) -> Self {
+    pub fn new(prefix: &str, t0: Epoch, rinex: Rinex, crinex: bool, gzip: bool) -> Self {
         let major = rinex.header.version.major;
 
         Self {
@@ -63,6 +64,7 @@ impl Collecter {
             rinex,
             crinex,
             gzip,
+            prefix: prefix.to_string(),
             name: String::from("UBX"),
             release_header: true,
             buf: Observations::default(),
@@ -127,10 +129,13 @@ impl Collecter {
 
     fn release(&mut self) {
         // not optimized.. generate only once please
-        let filename = if self.major < 3 {
-            v2_filename(self.crinex, self.gzip, self.t, &self.name)
+        let mut filename = self.prefix.clone();
+        filename.push('/');
+
+        if self.major < 3 {
+            filename.push_str(&v2_filename(self.crinex, self.gzip, self.t, &self.name));
         } else {
-            v3_filename(
+            filename.push_str(&v3_filename(
                 self.crinex,
                 self.gzip,
                 &self.name,
@@ -138,8 +143,8 @@ impl Collecter {
                 self.t,
                 Duration::from_days(1.0),
                 Duration::from_seconds(30.0),
-            )
-        };
+            ));
+        }
 
         debug!("Filename: \"{}\"", filename);
 
