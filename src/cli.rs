@@ -268,6 +268,10 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         self.matches.get_flag("crx")
     }
 
+    pub fn gzip(&self) -> bool {
+        self.matches.get_flag("gzip")
+    }
+
     pub fn agency(&self) -> Option<&String> {
         self.matches.get_one::<String>("agency")
     }
@@ -278,6 +282,10 @@ We use V3 by default, because very few tools support V4, so we remain compatible
 
     pub fn observer(&self) -> Option<&String> {
         self.matches.get_one::<String>("observer")
+    }
+
+    pub fn prefix(&self) -> Option<&String> {
+        self.matches.get_one::<String>("prefix")
     }
 
     fn rx_model(&self) -> String {
