@@ -114,6 +114,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         Constellation::Mixed
     };
 
+    let gzip = cli.gzip();
+    let crinex = cli.crinex();
     let forced_v2 = cli.forced_rinex_v2();
     let forced_v4 = cli.forced_rinex_v4();
 
@@ -166,7 +168,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut obs_header = ObsHeader::default();
 
-    if cli.crinex() {
+    if crinex {
         if forced_v2 {
             obs_header.crinex = Some(
                 CRINEX::default()
@@ -224,7 +226,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rinex = Rinex::basic_obs().with_header(header);
 
     let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(t, rinex, false, false);
+    let mut collecter = Collecter::new(t, rinex, crinex, false);
 
     info!("{} - program deployed", t);
     loop {

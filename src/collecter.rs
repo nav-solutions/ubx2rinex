@@ -12,7 +12,7 @@ use rinex::{
     observation::HeaderFields as ObsHeader,
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Epoch, Header, Observable, Rinex, SV,
+        Duration, Epoch, Header, Observable, Rinex, SV,
     },
 };
 
@@ -130,8 +130,15 @@ impl Collecter {
         let filename = if self.major < 3 {
             v2_filename(self.crinex, self.gzip, self.t, &self.name)
         } else {
-            // v3_filename(self.crinex, self.gzip, &self.name, &self.country, self.t, self.period.into(), self.sampling.into())
-            v2_filename(self.crinex, self.gzip, self.t, &self.name)
+            v3_filename(
+                self.crinex,
+                self.gzip,
+                &self.name,
+                "FRA",
+                self.t,
+                Duration::from_days(1.0),
+                Duration::from_seconds(30.0),
+            )
         };
 
         debug!("Filename: \"{}\"", filename);
