@@ -175,6 +175,11 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .action(ArgAction::SetTrue)
                             .help("Activate CRINEX compression, for optimized RINEX size. Disabled by default."),
                     )
+                    .arg(
+                        Arg::new("gzip")
+                            .long("gzip")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate Gzip compression."))
                     .get_matches()
             },
         }
