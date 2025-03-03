@@ -16,6 +16,8 @@ use rinex::{
     },
 };
 
+use crate::utils::{v2_filename, v3_filename};
+
 pub struct Rawxm {
     pub pr: f64,
     pub cp: f64,
@@ -42,20 +44,26 @@ impl Rawxm {
 pub struct Collecter {
     t: Epoch,
     major: u8,
+    gzip: bool,
+    crinex: bool,
     rinex: Rinex,
+    name: String,
     buf: Observations,
     release_header: bool,
 }
 
 impl Collecter {
     /// Builds new [Collecter]
-    pub fn new(t0: Epoch, rinex: Rinex) -> Self {
+    pub fn new(t0: Epoch, rinex: Rinex, crinex: bool, gzip: bool) -> Self {
         let major = rinex.header.version.major;
 
         Self {
             t: t0,
             major,
             rinex,
+            crinex,
+            gzip,
+            name: String::from("UBX"),
             release_header: true,
             buf: Observations::default(),
         }
@@ -119,7 +127,12 @@ impl Collecter {
 
     fn release(&mut self) {
         // not optimized.. generate only once please
-        let filename = self.rinex.standard_filename(true, None, None);
+        let filename = if self.major < 3 {
+            v2_filename(self.crinex, self.gzip, self.t, &self.name)
+        } else {
+            // v3_filename(self.crinex, self.gzip, &self.name, &self.country, self.t, self.period.into(), self.sampling.into())
+            v2_filename(self.crinex, self.gzip, self.t, &self.name)
+        };
 
         debug!("Filename: \"{}\"", filename);
 

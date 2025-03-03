@@ -25,7 +25,8 @@ serde_json = "1"
 
 ublox = "0.4.5"
 serialport = "4.2"
+hifitime = "4"
 
-gnss-rs = { version = "2.3.2", features = ["serde"] }
+gnss-rs = { version = "2.3.5", features = ["serde"] }
 # rinex = { path = "../rinex", features = ["nav", "obs"] }
 rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }

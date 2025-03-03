@@ -224,7 +224,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rinex = Rinex::basic_obs().with_header(header);
 
     let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(t, rinex);
+    let mut collecter = Collecter::new(t, rinex, false, false);
 
     info!("{} - program deployed", t);
     loop {
