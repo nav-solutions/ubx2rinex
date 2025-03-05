@@ -130,7 +130,7 @@ pub async fn main() -> Result<(), Error> {
     debug!("Measurement rate is {} ({:?})", sampling, time_ref);
 
     tokio::spawn(async move {
-        collecter.run();
+        collecter.run().await;
     });
 
     let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
@@ -183,7 +183,14 @@ pub async fn main() -> Result<(), Error> {
 
                         let rawxm = Rawxm::new(t, sv, pr, cp, dop, cno);
 
-                        tx.send(Message::Measurement(rawxm));
+                        match tx.blocking_send(Message::Measurement(rawxm)) {
+                            Ok(_) => {
+                                debug!("{}", rawxm);
+                            },
+                            Err(e) => {
+                                error!("{}({}) missed measurement: {}", t, sv, e);
+                            },
+                        }
                     }
                 },
                 PacketRef::MonHw(_pkt) => {
