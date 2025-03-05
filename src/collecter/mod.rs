@@ -35,6 +35,7 @@ use settings::Settings;
 enum State {
     #[default]
     Header,
+    Observations,
 }
 
 pub enum Message {
@@ -48,21 +49,22 @@ pub struct Collecter {
     buf: Observations,
     settings: Settings,
     fd: Option<File>,
+    header: Header,
     rx: Receiver<Message>,
-    release_header: bool,
     state: State,
 }
 
 impl Collecter {
     /// Builds new [Collecter]
     pub fn new(settings: Settings, rx: Receiver<Message>) -> Self {
+        let header = settings.header();
         Self {
             rx,
             fd: None,
             t: None,
             t0: None,
+            header,
             settings,
-            release_header: true,
             buf: Observations::default(),
             state: Default::default(),
         }
@@ -92,175 +94,107 @@ impl Collecter {
                     }
 
                     self.t = Some(rawxm.t);
+
+                    let c1c = if self.major == 3 {
+                        Observable::from_str("C1C").unwrap()
+                    } else {
+                        Observable::from_str("C1").unwrap()
+                    };
+
+                    let l1c = if self.major == 3 {
+                        Observable::from_str("L1C").unwrap()
+                    } else {
+                        Observable::from_str("L1").unwrap()
+                    };
+
+                    let d1c = if self.major == 3 {
+                        Observable::from_str("D1C").unwrap()
+                    } else {
+                        Observable::from_str("D1").unwrap()
+                    };
+
+                    self.buf.signals.push(SignalObservation {
+                        sv,
+                        lli: None,
+                        snr: None,
+                        value: rawxm.cp,
+                        observable: c1c,
+                    });
+
+                    self.buf.signals.push(SignalObservation {
+                        sv,
+                        lli: None,
+                        snr: None,
+                        value: rawxm.pr,
+                        observable: l1c,
+                    });
+
+                    self.buf.signals.push(SignalObservation {
+                        sv,
+                        lli: None,
+                        snr: None,
+                        value: rawxm.dop as f64,
+                        observable: d1c,
+                    });
                 },
             }
         }
 
         match self.state {
             State::Header => {
-                let t0 = self.t0.expect("internal error: initial epoch");
+                if self.t0.is_none() {
+                    continue; // too early
+                }
+
+                let t0 = self.t0.unwrap();
+
+                // obtain new file, release header
                 let mut fd = self.fd(t0);
+
+                let header = self.header();
+
+                header.format(&mut fd).unwrap_or_else(|e| {
+                    panic!(
+                        "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
+                        e
+                    )
+                });
+
+                self.state = State::Observations;
+            },
+            State::Observations => {
+                let key = ObsKey {
+                    epoch: self.t,
+                    flag: EpochFlag::Ok, // TODO,
+                };
+
+                let mut fd = self.fd.unwrap();
+
+                match self
+                    .buf
+                    .format(self.settings.major == 2, &key, &self.header, &mut fd)
+                {
+                    Ok(_) => {
+                        let _ = fd.flush();
+                        self.buf.clock = None;
+                        self.buf.signals.clear();
+                    },
+                    Err(e) => {
+                        error!("{} formatting issue: {}", self.t, e);
+                    },
+                }
             },
         }
     }
+
+    fn header(&self) -> Header {
+        let mut header = Header::default();
+
+        // TODO: observables need to be based on Ublox caps
+        if let Some(operator) = &self.settings.operator {
+            header.observer = Some(operator.clone());
+        }
+
+        header
+    }
 }
-
-//         let constellations = self
-//             .buf
-//             .signals
-//             .iter()
-//             .map(|sig| sig.sv.constellation)
-//             .unique()
-//             .sorted()
-//             .collect::<Vec<_>>();
-
-//         for constellation in constellations.iter() {
-//             let observables = self
-//                 .buf
-//                 .signals
-//                 .iter()
-//                 .filter_map(|sig| {
-//                     if sig.sv.constellation == *constellation {
-//                         Some(sig.observable.clone())
-//                     } else {
-//                         None
-//                     }
-//                 })
-//                 .unique()
-//                 .sorted()
-//                 .collect::<Vec<_>>();
-
-//             if let Some(ref mut obs_header) = self.rinex.header.obs {
-//                 obs_header.codes.insert(*constellation, observables.clone());
-//                 obs_header.timeof_first_obs = Some(self.t);
-//             }
-//         }
-
-//         self.rinex.header.format(w).unwrap_or_else(|e| {
-//             panic!("RINEX header formatting: {}. Aborting: corrupt RINEX", e);
-//         });
-
-//         self.release_header = false;
-//     }
-
-//     fn release(&mut self) {
-//         // not optimized.. generate only once please
-//         let mut filename = self.prefix.clone();
-//         filename.push('/');
-
-//         if self.major < 3 {
-//             filename.push_str(&v2_filename(self.crinex, self.gzip, self.t, &self.name));
-//         } else {
-//             filename.push_str(&v3_filename(
-//                 self.crinex,
-//                 self.gzip,
-//                 &self.name,
-//                 "FRA",
-//                 self.t,
-//                 Duration::from_days(1.0),
-//                 Duration::from_seconds(30.0),
-//             ));
-//         }
-
-//         debug!("Filename: \"{}\"", filename);
-
-//         let mut writer = match OpenOptions::new().write(true).read(true).open(&filename) {
-//             Ok(mut fd) => {
-//                 fd.seek(SeekFrom::End(0))
-//                     .unwrap_or_else(|e| panic!("Failed to append to file: {}", e));
-
-//                 BufWriter::new(fd)
-//             },
-//             Err(e) => {
-//                 let mut fd = File::create(&filename)
-//                     .unwrap_or_else(|e| panic!("Header release: failed to create file: {}", e));
-
-//                 let mut writer = BufWriter::new(fd);
-//                 self.release_header(&mut writer);
-//                 writer
-//             },
-//         };
-
-//         let key = ObsKey {
-//             epoch: self.t,
-//             flag: EpochFlag::Ok,
-//         };
-
-//         let header = self
-//             .rinex
-//             .header
-//             .obs
-//             .as_ref()
-//             .expect("internal error: invalid OBS RINEX");
-
-//         match self.buf.format(self.major == 2, &key, &header, &mut writer) {
-//             Ok(_) => {
-//                 // try to release internal buffer
-//                 // so content is available to user rapidly
-//                 let _ = writer.flush();
-//             },
-//             Err(e) => error!("rinex formatting error: {}", e),
-//         }
-
-//         trace!("released epoch {}", self.t);
-
-//         // clear
-//         self.buf.clock = None;
-//         self.buf.signals.clear();
-//     }
-
-//     /// Call this on any new [Rawxm] measurement
-//     pub fn new_observation(&mut self, t: Epoch, sv: SV, freq_id: u8, rawxm: Rawxm) {
-//         trace!("{} - ({} RAWX) - {}", t, sv, rawxm);
-//         if t > self.t {
-//             if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
-//                 self.release();
-//             }
-//             self.t = t;
-//         }
-
-//         let c1c = if self.major == 3 {
-//             Observable::from_str("C1C").unwrap()
-//         } else {
-//             Observable::from_str("C1").unwrap()
-//         };
-
-//         let l1c = if self.major == 3 {
-//             Observable::from_str("L1C").unwrap()
-//         } else {
-//             Observable::from_str("L1").unwrap()
-//         };
-
-//         let d1c = if self.major == 3 {
-//             Observable::from_str("D1C").unwrap()
-//         } else {
-//             Observable::from_str("D1").unwrap()
-//         };
-
-//         //if let Some(carrier) = freq_id_to_carrier(sv.constellation, freq_id) {
-//         //    if let Some(observable) = Observable::from_carrier(sv.constellation, carrier) {
-//         self.buf.signals.push(SignalObservation {
-//             sv,
-//             lli: None,
-//             snr: None,
-//             value: rawxm.cp,
-//             observable: c1c,
-//         });
-
-//         self.buf.signals.push(SignalObservation {
-//             sv,
-//             lli: None,
-//             snr: None,
-//             value: rawxm.pr,
-//             observable: l1c,
-//         });
-
-//         self.buf.signals.push(SignalObservation {
-//             sv,
-//             lli: None,
-//             snr: None,
-//             value: rawxm.dop as f64,
-//             observable: d1c,
-//         });
-//     }
-// }
