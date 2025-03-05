@@ -4,7 +4,10 @@ use rinex::{
     hardware::Receiver,
     prelude::{Constellation, Duration},
     production::SnapshotMode,
+    Rinex,
 };
+
+use crate::collecter::settings::Settings as RinexSettings;
 
 pub struct Cli {
     /// Arguments passed by user
@@ -220,72 +223,87 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         Some(baud)
     }
 
-    pub fn gps(&self) -> bool {
+    fn gps(&self) -> bool {
         self.matches.get_flag("gps")
     }
-    pub fn galileo(&self) -> bool {
+
+    fn galileo(&self) -> bool {
         self.matches.get_flag("galileo")
     }
-    pub fn bds(&self) -> bool {
+
+    fn bds(&self) -> bool {
         self.matches.get_flag("bds")
     }
-    pub fn qzss(&self) -> bool {
+
+    fn qzss(&self) -> bool {
         self.matches.get_flag("qzss")
     }
-    pub fn glonass(&self) -> bool {
-        self.matches.get_flag("glonass")
-    }
 
-    pub fn no_obs_rinex(&self) -> bool {
-        self.matches.get_flag("no-obs")
+    fn glonass(&self) -> bool {
+        self.matches.get_flag("glonass")
     }
 
     pub fn rx_clock(&self) -> bool {
         self.matches.get_flag("rx-clock")
     }
 
-    pub fn nav_rinex(&self) -> bool {
-        self.matches.get_flag("nav")
-    }
+    pub fn rinex_settings(&self) -> RinexSettings {
+        RinexSettings {
+            short_filename: true,
+            country: "FRA".to_string(),
+            gzip: self.matches.get_flag("gzip"),
+            crinex: self.matches.get_flag("crx"),
+            major: if self.matches.get_flag("v4") {
+                4
+            } else if self.matches.get_flag("v2") {
+                2
+            } else {
+                3
+            },
+            agency: if let Some(agency) = self.matches.get_one::<String>("agency") {
+                Some(agency.to_string())
+            } else {
+                None
+            },
+            operator: if let Some(operator) = self.matches.get_one::<String>("operator") {
+                Some(operator.to_string())
+            } else {
+                None
+            },
+            prefix: if let Some(prefix) = self.matches.get_one::<String>("prefix") {
+                Some(prefix.to_string())
+            } else {
+                None
+            },
+            name: if let Some(name) = self.matches.get_one::<String>("name") {
+                name.to_string()
+            } else {
+                "UBX".to_string()
+            },
+            sampling: if let Some(sampling) = self.matches.get_one::<String>("sampling") {
+                let dt = sampling
+                    .trim()
+                    .parse::<Duration>()
+                    .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
 
-    pub fn anti_spoofing(&self) -> bool {
-        self.matches.get_flag("anti-spoofing")
-    }
+                if dt.total_nanoseconds() < 50_000_000 {
+                    panic!("Sampling period is limited to 50ms");
+                }
+                dt
+            } else {
+                Duration::from_milliseconds(30_000.0)
+            },
+            period: if let Some(period) = self.matches.get_one::<String>("period") {
+                let dt = period
+                    .trim()
+                    .parse::<Duration>()
+                    .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
 
-    pub fn profile(&self) -> Option<&String> {
-        self.matches.get_one::<String>("profile")
-    }
-
-    pub fn forced_rinex_v2(&self) -> bool {
-        self.matches.get_flag("v2")
-    }
-
-    pub fn forced_rinex_v4(&self) -> bool {
-        self.matches.get_flag("v4")
-    }
-
-    pub fn crinex(&self) -> bool {
-        self.matches.get_flag("crx")
-    }
-
-    pub fn gzip(&self) -> bool {
-        self.matches.get_flag("gzip")
-    }
-
-    pub fn agency(&self) -> Option<&String> {
-        self.matches.get_one::<String>("agency")
-    }
-
-    pub fn operator(&self) -> Option<&String> {
-        self.matches.get_one::<String>("operator")
-    }
-
-    pub fn observer(&self) -> Option<&String> {
-        self.matches.get_one::<String>("observer")
-    }
-
-    pub fn prefix(&self) -> Option<&String> {
-        self.matches.get_one::<String>("prefix")
+                dt
+            } else {
+                Duration::from_hours(1.0)
+            },
+        }
     }
 
     fn rx_model(&self) -> String {
@@ -301,22 +319,6 @@ We use V3 by default, because very few tools support V4, so we remain compatible
             sn: "".to_string(),
             model: self.rx_model(),
             firmware: "".to_string(),
-        }
-    }
-
-    pub fn sampling(&self) -> Duration {
-        if let Some(sampling) = self.matches.get_one::<String>("sampling") {
-            let dt = sampling
-                .trim()
-                .parse::<Duration>()
-                .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
-
-            if dt.total_nanoseconds() < 50_000_000 {
-                panic!("Sampling period is limited to 50ms");
-            }
-            dt
-        } else {
-            Duration::from_milliseconds(30_000.0)
         }
     }
 }

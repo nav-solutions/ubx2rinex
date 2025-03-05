@@ -18,10 +18,7 @@ extern crate ublox;
 
 use thiserror::Error;
 
-use std::str::FromStr;
-
 use rinex::{
-    hardware::Receiver,
     hatanaka::CRINEX,
     observation::HeaderFields as ObsHeader,
     prelude::{Constellation, Duration, Epoch, Header, Observable, Rinex, TimeScale, Version, SV},
@@ -29,6 +26,8 @@ use rinex::{
 
 use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
+
+use tokio::sync::mpsc;
 
 use ublox::{
     AlignmentToReferenceTime, GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef,
@@ -41,7 +40,7 @@ mod device;
 mod utils;
 
 use cli::Cli;
-use collecter::{Collecter, Rawxm};
+use collecter::{rawxm::Rawxm, Collecter, Message};
 use device::Device;
 
 use utils::{gnss_id_to_constellation, to_timescale};
@@ -62,9 +61,8 @@ fn identify_constellation(id: u8) -> Result<Constellation, Error> {
     }
 }
 
-fn disable_obs_rinex(device: &mut Device) {}
-
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+pub async fn main() -> Result<(), Error> {
     // pretty_env_logger::init();
 
     let mut builder = Builder::from_default_env();
@@ -78,9 +76,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     // cli
     let cli = Cli::new();
 
-    let deploy_time =
-        Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system (OS) time: {}", e));
-
     // init
     let mut buffer = [0; 8192];
     let mut uptime = Duration::default();
@@ -93,104 +88,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let port = cli.port();
     let baud_rate = cli.baud_rate().unwrap_or(115_200);
 
-    // U-Blox setup
-    let rx_clock = cli.rx_clock();
-    let sampling = cli.sampling();
-    let anti_spoofing = cli.anti_spoofing();
+    // RINEX settings
+    let settings = cli.rinex_settings();
 
-    let profile = match cli.profile() {
-        Some(profile) => profile.to_string(),
-        _ => "portable".to_string(),
-    };
+    let (tx, rx) = mpsc::channel(10);
 
-    // RINEX collection options
-    let nav_rinex = cli.nav_rinex();
-    let no_obs_rinex = cli.no_obs_rinex();
-
-    let constellations = cli.constellations();
-    let constellation = if constellations.len() == 1 {
-        constellations[0]
-    } else {
-        Constellation::Mixed
-    };
-
-    let gzip = cli.gzip();
-    let crinex = cli.crinex();
-    let forced_v2 = cli.forced_rinex_v2();
-    let forced_v4 = cli.forced_rinex_v4();
-
-    let prefix = if let Some(prefix) = cli.prefix() {
-        prefix.to_string()
-    } else {
-        "".to_string()
-    };
-
-    let major = if forced_v4 {
-        4
-    } else if forced_v2 {
-        2
-    } else {
-        3
-    };
-
-    let mut rcvr = cli.receiver();
+    let mut collecter = Collecter::new(settings, rx);
 
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
-
-    // Device configurations
-    device
-        .read_version(&mut buffer, &mut rcvr)
-        .unwrap_or_else(|e| panic!("Failed to read firmware version: {}", e));
-
-    device
-        .read_gnss(&mut buffer)
-        .unwrap_or_else(|e| panic!("Failed to read GNSS constellations: {}", e));
-
-    let mut header = Header::default()
-        .with_version(Version::new(major, 0))
-        .with_receiver(rcvr)
-        .with_constellation(constellation);
-
-    if let Some(agency) = cli.agency() {
-        header.agency = Some(agency.clone());
-    }
-
-    if let Some(observer) = cli.observer() {
-        header.observer = Some(observer.clone());
-    }
-
-    if let Some(observer) = cli.observer() {
-        header.observer = Some(observer.clone());
-    }
-
-    if let Some(operator) = cli.operator() {
-        header.run_by = Some(operator.clone());
-    }
-
-    let program = format!("rtk-rs/ubx2rinex v{}", env!("CARGO_PKG_VERSION"));
-
-    header.program = Some(program.clone());
-
-    let mut obs_header = ObsHeader::default();
-
-    if crinex {
-        if forced_v2 {
-            obs_header.crinex = Some(
-                CRINEX::default()
-                    .with_date(deploy_time)
-                    .with_version(Version::new(1, 0))
-                    .with_prog(&program),
-            );
-        } else {
-            obs_header.crinex = Some(
-                CRINEX::default()
-                    .with_date(deploy_time)
-                    .with_version(Version::new(3, 0))
-                    .with_prog(&program),
-            );
-        }
-    }
 
     device.enable_nav_eoe(&mut buffer);
     debug!("UBX-NAV-EOE enabled");
@@ -198,14 +104,15 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     device.enable_nav_pvt(&mut buffer);
     debug!("UBX-NAV-PVT enabled");
 
-    if rx_clock {
+    device.enable_nav_sat(&mut buffer);
+    debug!("UBX-NAV-SAT enabled");
+
+    if cli.rx_clock() {
         device.enable_nav_clock(&mut buffer);
         debug!("UBX-NAV-CLK enabled");
     }
 
-    device.enable_nav_sat(&mut buffer);
-    debug!("UBX-NAV-PVT enabled");
-
+    let sampling = Duration::from_seconds(30.0);
     let measure_rate_ms = (sampling.total_nanoseconds() / 1_000_000) as u16;
 
     let nav_solutions_ratio = if measure_rate_ms > 10_000 {
@@ -222,19 +129,14 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     device.apply_cfg_rate(&mut buffer, measure_rate_ms, nav_solutions_ratio, time_ref);
     debug!("Measurement rate is {} ({:?})", sampling, time_ref);
 
-    if no_obs_rinex {
-    } else {
-        device.enable_obs_rinex(&mut buffer);
-        header.obs = Some(obs_header);
-        info!("Observation RINEX mode deployed");
-    }
+    tokio::spawn(async move {
+        collecter.run();
+    });
 
-    let rinex = Rinex::basic_obs().with_header(header);
+    let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
 
-    let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(&prefix, t, rinex, crinex, false);
+    info!("{} - program deployed", now);
 
-    info!("{} - program deployed", t);
     loop {
         let _ = device.consume_all_cb(&mut buffer, |packet| {
             match packet {
@@ -245,7 +147,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 PacketRef::RxmRawx(pkt) => {
                     let tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
                     let week = pkt.week();
-                    t = Epoch::from_time_of_week(week as u32, tow_nanos, timescale);
+                    let t = Epoch::from_time_of_week(week as u32, tow_nanos, timescale);
 
                     let stat = pkt.rec_stat();
 
@@ -279,8 +181,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let prn = meas.sv_id();
                         let sv = SV::new(constell, prn);
 
-                        let rawxm = Rawxm::new(pr, cp, dop, cno);
-                        collecter.new_observation(t, sv, 0, rawxm);
+                        let rawxm = Rawxm::new(t, sv, pr, cp, dop, cno);
+
+                        tx.send(Message::Measurement(rawxm));
                     }
                 },
                 PacketRef::MonHw(_pkt) => {
@@ -411,3 +314,44 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
     } // loop
 }
+
+//     let deploy_time =
+//         Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system (OS) time: {}", e));
+
+//     // U-Blox setup
+//     let rx_clock = cli.rx_clock();
+//     let sampling = cli.sampling();
+//     let anti_spoofing = cli.anti_spoofing();
+
+//     let profile = match cli.profile() {
+//         Some(profile) => profile.to_string(),
+//         _ => "portable".to_string(),
+//     };
+
+//     let constellations = cli.constellations();
+//     let constellation = if constellations.len() == 1 {
+//         constellations[0]
+//     } else {
+//         Constellation::Mixed
+//     };
+
+//     // Device configurations
+//     device
+//         .read_version(&mut buffer, &mut rcvr)
+//         .unwrap_or_else(|e| panic!("Failed to read firmware version: {}", e));
+
+//     device
+//         .read_gnss(&mut buffer)
+//         .unwrap_or_else(|e| panic!("Failed to read GNSS constellations: {}", e));
+
+//     if no_obs_rinex {
+//     } else {
+//         device.enable_obs_rinex(&mut buffer);
+//         header.obs = Some(obs_header);
+//         info!("Observation RINEX mode deployed");
+//     }
+
+//     let rinex = Rinex::basic_obs().with_header(header);
+
+//     let mut t = deploy_time.to_time_scale(timescale);
+//     let mut collecter = Collecter::new(&prefix, t, rinex, crinex, false);
