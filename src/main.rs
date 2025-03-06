@@ -80,7 +80,7 @@ pub async fn main() {
     // RINEX settings
     let settings = cli.rinex_settings();
 
-    let (tx, rx) = mpsc::channel(10);
+    let (tx, rx) = mpsc::channel(32);
 
     let mut collecter = Collecter::new(settings, ubx_settings.clone(), rx);
 
@@ -91,7 +91,7 @@ pub async fn main() {
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
-    device.configure(&ubx_settings, &mut buffer, &tx);
+    device.configure(&ubx_settings, &mut buffer, tx.clone());
 
     let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
 

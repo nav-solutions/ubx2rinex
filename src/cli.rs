@@ -97,8 +97,17 @@ impl Cli {
                             .long("anti-spoofing")
                             .action(ArgAction::SetTrue)
                             .help("Makes sure anti jamming/spoofing is enabled. When enabled, it is automatically emphasized in the collected RINEX."))
-                    
                     .next_help_heading("RINEX Collection")
+                    .arg(
+                        Arg::new("name")
+                            .long("name")
+                            .short('n')
+                            .required(false)
+                            .action(ArgAction::Set)
+                            .help("Define a custom name. To respect standard naming conventions,
+this should be a 4 letter code, usually named after your geodetic marker.
+When not defined, the default value is \"UBXR\".")
+                    )
                     .arg(
                         Arg::new("prefix")
                             .long("prefix")
@@ -337,7 +346,7 @@ We use V3 by default, because very few tools support V4, so we remain compatible
             name: if let Some(name) = self.matches.get_one::<String>("name") {
                 name.to_string()
             } else {
-                "UBX".to_string()
+                "UBXR".to_string()
             },
             period: if let Some(period) = self.matches.get_one::<String>("period") {
                 let dt = period

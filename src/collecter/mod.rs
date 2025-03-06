@@ -45,6 +45,7 @@ enum State {
     Observables,
     Header,
     Collecting,
+    Release,
 }
 
 #[derive(Debug)]
@@ -91,8 +92,8 @@ impl Collecter {
 
     pub async fn run(&mut self) {
         loop {
-            if let Some(msg) = self.rx.recv().await {
-                match msg {
+            match self.rx.try_recv() {
+                Ok(msg) => match msg {
                     Message::FirmwareVersion(version) => {
                         self.ubx_settings.firmware = Some(version.to_string());
                     },
@@ -145,10 +146,11 @@ impl Collecter {
                             observable: d1c,
                         });
                     },
-                }
+                },
+                Err(e) => {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                },
             }
-
-            debug!("state={:?}", self.state);
 
             match self.state {
                 State::FirmwareVersion => {
@@ -165,34 +167,38 @@ impl Collecter {
                     }
                 },
                 State::Header => {
-                    if self.t0.is_none() {
-                        return;
+                    if self.t0.is_some() {
+                        let t0 = self.t0.unwrap();
+
+                        // obtain new file, release header
+                        let mut fd = BufWriter::new(self.fd(t0));
+
+                        let header = self.build_header();
+
+                        header.format(&mut fd).unwrap_or_else(|e| {
+                            panic!(
+                                "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
+                                e
+                            )
+                        });
+
+                        let _ = fd.flush();
+
+                        self.fd = Some(fd);
+                        self.header = Some(header);
+                        self.state = State::Collecting;
                     }
-
-                    let t0 = self.t0.unwrap();
-
-                    // obtain new file, release header
-                    let mut fd = BufWriter::new(self.fd(t0));
-
-                    let header = self.build_header();
-
-                    header.format(&mut fd).unwrap_or_else(|e| {
-                        panic!(
-                            "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
-                            e
-                        )
-                    });
-
-                    self.fd = Some(fd);
-                    self.header = Some(header);
-                    self.state = State::Collecting;
                 },
 
                 State::Collecting => {
-                    if self.t.is_none() {
-                        return;
+                    if self.t.is_some() {
+                        if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
+                            self.state = State::Release;
+                        }
                     }
+                },
 
+                State::Release => {
                     let t = self.t.unwrap();
 
                     let key = ObsKey {
@@ -220,6 +226,7 @@ impl Collecter {
                             let _ = fd.flush();
                             self.buf.clock = None;
                             self.buf.signals.clear();
+                            self.state = State::Collecting;
                         },
                         Err(e) => {
                             error!("{} formatting issue: {}", t, e);
@@ -227,6 +234,8 @@ impl Collecter {
                     }
                 },
             }
+
+            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
         }
     }
 

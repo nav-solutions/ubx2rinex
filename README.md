@@ -128,6 +128,17 @@ and dumps it into supported RINEX formats. It is important to keep in mind that,
 a meaningful (and correct) RINEX header, we can only redact it after completion of a first entire epoch,
 every time a new gathering period starts.
 
+File name conventions
+=====================
+
+`ubx2rinex` follows and uses RINEX standard conventions. By default we will generate
+RINEX `V2` (short) filenames, as it only requires one field to be complete.
+By default, this field is set to `UBX`, but you can change that with `--name`:
+
+```bash
+RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps --name M8T
+```
+
 Signal Collection
 =================
 
