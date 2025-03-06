@@ -1,10 +1,9 @@
-use flate2::{write::GzEncoder, GzCompression};
+use flate2::{write::GzEncoder, Compression};
 use std::fs::File;
-use std::io::BufWriter;
 
 pub enum FileDescriptor {
-    Plain(BufWriter<File>),
-    Gzip(BufWriter<GzEncoder<File>>),
+    Plain(File),
+    Gzip(GzEncoder<File>),
 }
 
 impl std::io::Write for FileDescriptor {
@@ -28,11 +27,11 @@ impl FileDescriptor {
         let fd = File::create(&filename)
             .unwrap_or_else(|e| panic!("Failed to open \"{}\": {}", filename, e));
 
-        if self.settings.gzip {
-            let compression = GzCompression::new(5);
-            Self::Gzip(BufWriter::new(GzEncoder::new(fd, compression)))
+        if gzip {
+            let compression = Compression::new(5);
+            Self::Gzip(GzEncoder::new(fd, compression))
         } else {
-            Self::Plain(BufWriter::new(fd))
+            Self::Plain(fd)
         }
     }
 }

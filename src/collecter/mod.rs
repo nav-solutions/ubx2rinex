@@ -68,8 +68,8 @@ pub struct Collecter {
     rx: Receiver<Message>,
     state: State,
     settings: Settings,
-    fd: Option<FileDescriptor>,
     ubx_settings: UbloxSettings,
+    fd: Option<BufWriter<FileDescriptor>>,
 }
 
 impl Collecter {
@@ -98,6 +98,7 @@ impl Collecter {
     pub async fn run(&mut self) {
         while let Some(msg) = self.rx.recv().await {
             match msg {
+                Message::FirmwareVersion(version) => {},
                 Message::EndOfEpoch => {},
                 Message::Measurement(rawxm) => {
                     if self.t0.is_none() {
@@ -171,7 +172,7 @@ impl Collecter {
                 let t0 = self.t0.unwrap();
 
                 // obtain new file, release header
-                let mut fd = self.fd(t0);
+                let mut fd = BufWriter::new(self.fd(t0));
 
                 let header = self.header();
 
@@ -197,10 +198,14 @@ impl Collecter {
                     flag: EpochFlag::Ok, // TODO,
                 };
 
-                let mut fd = self.fd.unwrap();
+                let mut fd = self.fd.as_mut().unwrap();
 
-                let obs_header = self
+                let header = self
                     .header
+                    .as_ref()
+                    .expect("internal error: undefined Header");
+
+                let obs_header = header
                     .obs
                     .as_ref()
                     .expect("internal error: missing Observation header");

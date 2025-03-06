@@ -109,7 +109,6 @@ mod test {
             name: "UBX".to_string(),
             country: "FRA".to_string(),
             period: Duration::from_days(1.0),
-            sampling: Duration::from_seconds(30.0),
         };
 
         let t0 = Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap();
@@ -132,16 +131,15 @@ mod test {
             gzip: false,
             crinex: false,
             prefix: None,
-            short_filename: true,
+            short_filename: false,
             name: "UBX".to_string(),
             country: "FRA".to_string(),
             period: Duration::from_days(1.0),
-            sampling: Duration::from_seconds(30.0),
         };
 
         let t0 = Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap();
 
-        assert_eq!(settings.filename(t0), "UBXUSA_R_20200010000_01D_30S_MO.rnx");
+        assert_eq!(settings.filename(t0), "UBXFRA_R_20200010000_01D_30S_MO.rnx");
 
         settings.crinex = true;
 
