@@ -1,7 +1,7 @@
 use gnss::prelude::SV;
 use hifitime::Epoch;
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Rawxm {
     pub t: Epoch,
     pub sv: SV,

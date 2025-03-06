@@ -12,6 +12,16 @@ pub fn to_timescale(t_ref: AlignmentToReferenceTime) -> TimeScale {
     }
 }
 
+pub fn from_timescale(ts: TimeScale) -> AlignmentToReferenceTime {
+    match ts {
+        TimeScale::GPST => AlignmentToReferenceTime::Gps,
+        TimeScale::GST => AlignmentToReferenceTime::Gal,
+        TimeScale::BDT => AlignmentToReferenceTime::Bds,
+        TimeScale::UTC => AlignmentToReferenceTime::Utc,
+        ts => panic!("{} timescale is not supported", ts),
+    }
+}
+
 pub fn constell_mask_to_string(mask: MonGnssConstellMask) -> String {
     let mut string = String::with_capacity(16);
     if mask.intersects(MonGnssConstellMask::GPS) {
@@ -51,7 +61,7 @@ pub fn constellations_to_mask(constellations: &[Constellation]) -> MonGnssConste
     mask
 }
 
-pub fn gnss_id_to_constellation(id: u8) -> Option<Constellation> {
+pub fn to_constellation(id: u8) -> Option<Constellation> {
     match id {
         0 => Some(Constellation::GPS),
         1 => Some(Constellation::SBAS),

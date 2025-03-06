@@ -5,10 +5,7 @@ use hifitime::{
     prelude::{Duration, Epoch, Formatter},
 };
 
-use rinex::{
-    prelude::Observable,
-    production::{FFU, PPU},
-};
+use rinex::production::{FFU, PPU};
 
 pub struct Settings {
     pub major: u8,
@@ -25,11 +22,19 @@ pub struct Settings {
 
 impl Settings {
     pub fn filename(&self, t: Epoch) -> String {
-        if self.short_filename {
-            self.v2_filename(t)
+        let mut filepath = if let Some(prefix) = &self.prefix {
+            format!("{}/", prefix)
         } else {
-            self.v3_filename(t)
+            "".to_string()
+        };
+
+        if self.short_filename {
+            filepath.push_str(&self.v2_filename(t));
+        } else {
+            filepath.push_str(&self.v3_filename(t));
         }
+
+        filepath
     }
 
     fn v2_filename(&self, t: Epoch) -> String {

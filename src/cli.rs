@@ -1,10 +1,5 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
-
-use rinex::{
-    prelude::{Constellation, Duration, TimeScale},
-    production::SnapshotMode,
-    Rinex,
-};
+use rinex::prelude::{Constellation, Duration, TimeScale};
 
 use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
 
@@ -102,6 +97,7 @@ impl Cli {
                             .long("anti-spoofing")
                             .action(ArgAction::SetTrue)
                             .help("Makes sure anti jamming/spoofing is enabled. When enabled, it is automatically emphasized in the collected RINEX."))
+                    
                     .next_help_heading("RINEX Collection")
                     .arg(
                         Arg::new("prefix")
@@ -110,8 +106,9 @@ impl Cli {
                             .help("Custom directory prefix for output products. Default is none!"),
                     )
                     .arg(
-                        Arg::new("snapshot")
-                            .long("snapshot")
+                        Arg::new("period")
+                            .long("period")
+                            .short('p')
                             .action(ArgAction::Set)
                             .required(false)
                             .help("Define snapshot (=collection) mode")
@@ -141,6 +138,18 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .action(ArgAction::SetTrue)
                             .help("Upgrade RINEX revision to V4. You can also downgrade to RINEX V2 with --v2.
 We use V3 by default, because very few tools support V4, so we remain compatible.")
+                    )
+                    .arg(
+                        Arg::new("long")
+                            .short('l')
+                            .action(ArgAction::SetTrue)
+                            .help("Prefer long (V3 like) file names over short (V2) file names")
+                    )
+                    .arg(
+                        Arg::new("country")
+                            .short('c')
+                            .action(ArgAction::Set)
+                            .help("Specify country code (3 letter) in case of V3 file name. Default: \"FRA\"")
                     )
                     .arg(
                         Arg::new("agency")
@@ -262,8 +271,8 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         }
     }
 
-    fn solutions_ratio(sampling_period: Duration) -> u32 {
-        let period_ms = (sampling_period.total_nanoseconds() / 1_000_000) as u32;
+    fn solutions_ratio(sampling_period: Duration) -> u16 {
+        let period_ms = (sampling_period.total_nanoseconds() / 1_000_000) as u16;
         if period_ms > 10_000 {
             1
         } else if period_ms > 1_000 {
@@ -295,8 +304,7 @@ We use V3 by default, because very few tools support V4, so we remain compatible
 
     pub fn rinex_settings(&self) -> RinexSettings {
         RinexSettings {
-            short_filename: true,
-            country: "FRA".to_string(),
+            short_filename: !self.matches.get_flag("long"),
             gzip: self.matches.get_flag("gzip"),
             crinex: self.matches.get_flag("crx"),
             major: if self.matches.get_flag("v4") {
@@ -305,6 +313,11 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                 2
             } else {
                 3
+            },
+            country: if let Some(country) = self.matches.get_one::<String>("country") {
+                country.to_string()
+            } else {
+                "FRA".to_string()
             },
             agency: if let Some(agency) = self.matches.get_one::<String>("agency") {
                 Some(agency.to_string())

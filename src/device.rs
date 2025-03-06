@@ -5,14 +5,16 @@ use ublox::{
     UbxPacketMeta, UbxPacketRequest,
 };
 
-use rinex::hardware::Receiver;
-
 use serialport::SerialPort;
 use std::time::Duration;
 
-use crate::utils::constell_mask_to_string;
+use crate::utils::{constell_mask_to_string, from_timescale};
 
 use log::{debug, error, info};
+
+use crate::{collecter::Message, UbloxSettings};
+
+use tokio::sync::mpsc::Sender;
 
 pub struct Device {
     pub port: Box<dyn SerialPort>,
@@ -20,6 +22,31 @@ pub struct Device {
 }
 
 impl Device {
+    pub fn configure(&mut self, settings: &UbloxSettings, buf: &mut [u8], tx: &Sender<Message>) {
+        self.read_version(buf, tx).unwrap();
+
+        if settings.rx_clock {
+            self.enable_nav_clock(buf);
+        }
+
+        self.enable_nav_eoe(buf);
+        debug!("UBX-NAV-EOE enabled");
+
+        self.enable_nav_pvt(buf);
+        debug!("UBX-NAV-PVT enabled");
+
+        self.enable_nav_sat(buf);
+        debug!("UBX-NAV-SAT enabled");
+
+        self.enable_obs_rinex(buf);
+
+        let measure_rate_ms = (settings.sampling_period.total_nanoseconds() / 1_000_000) as u16;
+
+        let time_ref = from_timescale(settings.timescale);
+
+        self.apply_cfg_rate(buf, measure_rate_ms, settings.solutions_ratio, time_ref);
+    }
+
     pub fn open(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {
         // open port
         let port = serialport::new(port_str, baud)
@@ -116,7 +143,7 @@ impl Device {
         Ok(())
     }
 
-    pub fn read_version(&mut self, buffer: &mut [u8], rcvr: &mut Receiver) -> std::io::Result<()> {
+    pub fn read_version(&mut self, buffer: &mut [u8], tx: &Sender<Message>) -> std::io::Result<()> {
         self.write_all(&UbxPacketRequest::request_for::<MonVer>().into_packet_bytes())
             .unwrap_or_else(|e| panic!("Failed to request firmware version: {}", e));
 
@@ -128,11 +155,17 @@ impl Device {
                     let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());
                     debug!("U-Blox Firmware version: {}", firmware);
-                    rcvr.firmware = firmware.to_string();
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
                     packet_found = true;
                 }
             })?;
         }
+
         Ok(())
     }
 
@@ -158,7 +191,7 @@ impl Device {
         });
     }
 
-    pub fn enable_obs_rinex(&mut self, buffer: &mut [u8]) {
+    fn enable_obs_rinex(&mut self, buffer: &mut [u8]) {
         // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
         // The other positions are for I2C, SPI, etc. Consult your device manual.
 
@@ -171,7 +204,7 @@ impl Device {
             .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
     }
 
-    pub fn enable_nav_eoe(&mut self, buffer: &mut [u8]) {
+    fn enable_nav_eoe(&mut self, buffer: &mut [u8]) {
         // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
         // The other positions are for I2C, SPI, etc. Consult your device manual.
 
@@ -184,7 +217,7 @@ impl Device {
             .unwrap_or_else(|e| panic!("UBX-RXM-EOE error: {}", e));
     }
 
-    pub fn enable_nav_clock(&mut self, buffer: &mut [u8]) {
+    fn enable_nav_clock(&mut self, buffer: &mut [u8]) {
         self.write_all(
             &CfgMsgAllPortsBuilder::set_rate_for::<NavClock>([1, 1, 1, 1, 1, 1])
                 .into_packet_bytes(),

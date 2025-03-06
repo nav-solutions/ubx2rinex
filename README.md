@@ -219,7 +219,32 @@ NB:
 - the first signal observation is released everyday at midnight 00:00:00 in the main Timescale
 - the last signal observation is released everyday at 23:59:30 in the main Timescale
 
-Snapshot period interruption
-============================
+File rotation and descriptors
+=============================
 
-`ubx2rinex` does not support graceful interruption. If you abort the ongoing period by killing this program, you may wind-up with an incomplete epoch at the very end.
+`ubx2rinex` owns the File descriptor with write access (only) until the end of this period.  
+That means you can only read the file until the end of the period.
+
+At the end of each period, the file descriptor is released and you can fully process it.   
+The file pointer is then incremented, using standard naming conventions.
+
+`ubx2rinex` will provide content "as soon as" it exists (+/- some file descriptor access, that we
+try to keep efficient). This means that exploitation of this program is compatible with real-time
+watching of the file being produced and each new symbol is published fairly quickly.
+
+Release period interruption
+===========================
+
+You should halt `ubx2rinex` by sending a `SIGTERM` (Ctrl+C) event. The program will
+catch the signal, notify it should halt and will publish the ongoing epoch.
+Pending observations are pushed into the file buffer and the file descriptor is released.  
+In other words, `ubx2rinex` ensures all available is published even on program termination.
+
+no-std
+======
+
+This program relies on both the `ubx` parser and the `rinex` library.  
+The first one supports `no-std`, but it is unfortunately not true for the latter.  
+We will see if we can provide some very reduced, `no-std` compatible portions of the `rinex` library
+in the future, especially the file production side. 
+This is not scheduled work as of today. Feel free to join in if you want to see this happen sooner.
