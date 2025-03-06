@@ -1,13 +1,12 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 
 use rinex::{
-    hardware::Receiver,
-    prelude::{Constellation, Duration},
+    prelude::{Constellation, Duration, TimeScale},
     production::SnapshotMode,
     Rinex,
 };
 
-use crate::collecter::settings::Settings as RinexSettings;
+use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
 
 pub struct Cli {
     /// Arguments passed by user
@@ -188,27 +187,6 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         }
     }
 
-    pub fn constellations(&self) -> Vec<Constellation> {
-        let mut constellations = Vec::<Constellation>::with_capacity(4);
-
-        if self.gps() {
-            constellations.push(Constellation::GPS);
-        }
-        if self.galileo() {
-            constellations.push(Constellation::Galileo);
-        }
-        if self.bds() {
-            constellations.push(Constellation::BeiDou);
-        }
-        if self.qzss() {
-            constellations.push(Constellation::QZSS);
-        }
-        if self.glonass() {
-            constellations.push(Constellation::Glonass);
-        }
-        constellations
-    }
-
     /// Returns User serial port specification
     pub fn port(&self) -> &str {
         self.matches.get_one::<String>("port").unwrap()
@@ -243,8 +221,76 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         self.matches.get_flag("glonass")
     }
 
-    pub fn rx_clock(&self) -> bool {
-        self.matches.get_flag("rx-clock")
+    fn constellations(&self) -> Vec<Constellation> {
+        let mut constellations = Vec::<Constellation>::with_capacity(4);
+
+        if self.gps() {
+            constellations.push(Constellation::GPS);
+        }
+        if self.galileo() {
+            constellations.push(Constellation::Galileo);
+        }
+        if self.bds() {
+            constellations.push(Constellation::BeiDou);
+        }
+        if self.qzss() {
+            constellations.push(Constellation::QZSS);
+        }
+        if self.glonass() {
+            constellations.push(Constellation::Glonass);
+        }
+        constellations
+    }
+
+    fn timescale(&self) -> TimeScale {
+        TimeScale::GPST
+    }
+
+    fn sampling_period(&self) -> Duration {
+        if let Some(sampling) = self.matches.get_one::<String>("sampling") {
+            let dt = sampling
+                .trim()
+                .parse::<Duration>()
+                .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
+
+            if dt.total_nanoseconds() < 50_000_000 {
+                panic!("Sampling period is limited to 50ms");
+            }
+            dt
+        } else {
+            Duration::from_milliseconds(30_000.0)
+        }
+    }
+
+    fn solutions_ratio(sampling_period: Duration) -> u32 {
+        let period_ms = (sampling_period.total_nanoseconds() / 1_000_000) as u32;
+        if period_ms > 10_000 {
+            1
+        } else if period_ms > 1_000 {
+            2
+        } else {
+            10
+        }
+    }
+
+    pub fn ublox_settings(&self) -> UbloxSettings {
+        let sampling_period = self.sampling_period();
+
+        UbloxSettings {
+            observables: Default::default(),
+            sampling_period,
+            timescale: self.timescale(),
+            constellations: self.constellations(),
+            rx_clock: self.matches.get_flag("rx-clock"),
+            solutions_ratio: Self::solutions_ratio(sampling_period),
+            sn: None,
+            firmware: None,
+            model: if let Some(model) = self.matches.get_one::<String>("model") {
+                Some(model.to_string())
+            } else {
+                None
+            },
+        }
     }
 
     pub fn rinex_settings(&self) -> RinexSettings {
@@ -280,19 +326,6 @@ We use V3 by default, because very few tools support V4, so we remain compatible
             } else {
                 "UBX".to_string()
             },
-            sampling: if let Some(sampling) = self.matches.get_one::<String>("sampling") {
-                let dt = sampling
-                    .trim()
-                    .parse::<Duration>()
-                    .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
-
-                if dt.total_nanoseconds() < 50_000_000 {
-                    panic!("Sampling period is limited to 50ms");
-                }
-                dt
-            } else {
-                Duration::from_milliseconds(30_000.0)
-            },
             period: if let Some(period) = self.matches.get_one::<String>("period") {
                 let dt = period
                     .trim()
@@ -303,22 +336,6 @@ We use V3 by default, because very few tools support V4, so we remain compatible
             } else {
                 Duration::from_hours(1.0)
             },
-        }
-    }
-
-    fn rx_model(&self) -> String {
-        if let Some(model) = self.matches.get_one::<String>("model") {
-            model.to_string()
-        } else {
-            "".to_string()
-        }
-    }
-
-    pub fn receiver(&self) -> Receiver {
-        Receiver {
-            sn: "".to_string(),
-            model: self.rx_model(),
-            firmware: "".to_string(),
         }
     }
 }

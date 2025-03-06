@@ -12,6 +12,7 @@ edition = "2021"
 readme = "README.md"
 
 [dependencies]
+flate2 = "1"
 thiserror = "2"
 itertools = "0.14"
 

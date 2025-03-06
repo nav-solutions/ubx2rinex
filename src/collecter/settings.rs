@@ -5,17 +5,19 @@ use hifitime::{
     prelude::{Duration, Epoch, Formatter},
 };
 
-use rinex::production::{FFU, PPU};
+use rinex::{
+    prelude::Observable,
+    production::{FFU, PPU},
+};
 
 pub struct Settings {
     pub major: u8,
     pub gzip: bool,
     pub crinex: bool,
-    pub short_filename: bool,
     pub name: String,
     pub country: String,
     pub period: Duration,
-    pub sampling: Duration,
+    pub short_filename: bool,
     pub prefix: Option<String>,
     pub agency: Option<String>,
     pub operator: Option<String>,
@@ -23,7 +25,7 @@ pub struct Settings {
 
 impl Settings {
     pub fn filename(&self, t: Epoch) -> String {
-        if self.major == 2 {
+        if self.short_filename {
             self.v2_filename(t)
         } else {
             self.v3_filename(t)
@@ -58,7 +60,7 @@ impl Settings {
 
     fn v3_filename(&self, t: Epoch) -> String {
         let ppu: PPU = self.period.into();
-        let ffu: FFU = self.sampling.into();
+        let ffu: FFU = Duration::from_seconds(30.0).into();
 
         let mut formatted = format!("{}{}_R_", self.name, self.country);
 

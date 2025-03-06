@@ -1,21 +1,26 @@
 use std::{
-    fs::{File, OpenOptions},
+    fs::File,
     io::{BufWriter, Seek, SeekFrom, Write},
-    os::linux::raw,
     str::FromStr,
 };
 
-use ublox::{AlignmentToReferenceTime, MonGnssConstellMask};
-
 use rinex::{
-    prelude::{Carrier, Constellation, Duration, Epoch, TimeScale},
+    prelude::{
+        //Carrier,
+        //Constellation,
+        Duration,
+        Epoch,
+        //TimeScale,
+        CRINEX,
+    },
     production::{FFU, PPU},
 };
 
 use tokio::sync::mpsc::Receiver;
 
-use itertools::Itertools;
-use log::{debug, error, trace};
+// use itertools::Itertools;
+
+use log::error;
 
 use rinex::{
     observation::HeaderFields as ObsHeader,
@@ -25,63 +30,69 @@ use rinex::{
     },
 };
 
+use crate::UbloxSettings;
+
+use flate2::{write::GzEncoder, Compression as GzCompression};
+
+mod fd;
+
 pub mod rawxm;
 pub mod settings;
 
+use fd::FileDescriptor;
 use rawxm::Rawxm;
 use settings::Settings;
 
 #[derive(Debug, Default, Copy, Clone)]
 enum State {
     #[default]
+    FirmwareVersion,
+    Constellations,
+    Observables,
     Header,
-    Observations,
+    Collecting,
 }
 
 pub enum Message {
     EndOfEpoch,
     Measurement(Rawxm),
+    FirmwareVersion(String),
 }
 
 pub struct Collecter {
     t: Option<Epoch>,
     t0: Option<Epoch>,
+    enabled: bool,
     buf: Observations,
-    settings: Settings,
-    fd: Option<File>,
-    header: Header,
+    header: Option<Header>,
     rx: Receiver<Message>,
     state: State,
+    settings: Settings,
+    fd: Option<FileDescriptor>,
+    ubx_settings: UbloxSettings,
 }
 
 impl Collecter {
     /// Builds new [Collecter]
-    pub fn new(settings: Settings, rx: Receiver<Message>) -> Self {
-        let header = settings.header();
+    pub fn new(settings: Settings, ublox: UbloxSettings, rx: Receiver<Message>) -> Self {
         Self {
             rx,
             fd: None,
             t: None,
             t0: None,
-            header,
             settings,
+            enabled: true,
+            header: None,
+            ubx_settings: ublox,
             buf: Observations::default(),
             state: Default::default(),
         }
     }
 
     /// Obtain a new file descriptor
-    fn fd(&self, t: Epoch) -> BufWriter<File> {
+    fn fd(&self, t: Epoch) -> FileDescriptor {
         let filename = self.settings.filename(t);
-
-        let fd = File::create(&filename)
-            .unwrap_or_else(|e| panic!("Failed to open \"{}\": {}", filename, e));
-
-        if self.settings.gzip {
-            BufWriter::new(fd)
-        } else {
-            BufWriter::new(fd)
-        }
+        FileDescriptor::new(self.settings.gzip, &filename)
     }
 
     pub async fn run(&mut self) {
@@ -95,26 +106,26 @@ impl Collecter {
 
                     self.t = Some(rawxm.t);
 
-                    let c1c = if self.major == 3 {
+                    let c1c = if self.settings.major == 3 {
                         Observable::from_str("C1C").unwrap()
                     } else {
                         Observable::from_str("C1").unwrap()
                     };
 
-                    let l1c = if self.major == 3 {
+                    let l1c = if self.settings.major == 3 {
                         Observable::from_str("L1C").unwrap()
                     } else {
                         Observable::from_str("L1").unwrap()
                     };
 
-                    let d1c = if self.major == 3 {
+                    let d1c = if self.settings.major == 3 {
                         Observable::from_str("D1C").unwrap()
                     } else {
                         Observable::from_str("D1").unwrap()
                     };
 
                     self.buf.signals.push(SignalObservation {
-                        sv,
+                        sv: rawxm.sv,
                         lli: None,
                         snr: None,
                         value: rawxm.cp,
@@ -122,7 +133,7 @@ impl Collecter {
                     });
 
                     self.buf.signals.push(SignalObservation {
-                        sv,
+                        sv: rawxm.sv,
                         lli: None,
                         snr: None,
                         value: rawxm.pr,
@@ -130,7 +141,7 @@ impl Collecter {
                     });
 
                     self.buf.signals.push(SignalObservation {
-                        sv,
+                        sv: rawxm.sv,
                         lli: None,
                         snr: None,
                         value: rawxm.dop as f64,
@@ -141,9 +152,20 @@ impl Collecter {
         }
 
         match self.state {
+            State::FirmwareVersion => {
+                if self.ubx_settings.firmware.is_some() {
+                    self.state = State::Constellations;
+                }
+            },
+            State::Constellations => {
+                self.state = State::Observables;
+            },
+            State::Observables => {
+                self.state = State::Header;
+            },
             State::Header => {
                 if self.t0.is_none() {
-                    continue; // too early
+                    return;
                 }
 
                 let t0 = self.t0.unwrap();
@@ -160,19 +182,32 @@ impl Collecter {
                     )
                 });
 
-                self.state = State::Observations;
+                self.state = State::Collecting;
             },
-            State::Observations => {
+
+            State::Collecting => {
+                if self.t.is_none() {
+                    return;
+                }
+
+                let t = self.t.unwrap();
+
                 let key = ObsKey {
-                    epoch: self.t,
+                    epoch: t,
                     flag: EpochFlag::Ok, // TODO,
                 };
 
                 let mut fd = self.fd.unwrap();
 
+                let obs_header = self
+                    .header
+                    .obs
+                    .as_ref()
+                    .expect("internal error: missing Observation header");
+
                 match self
                     .buf
-                    .format(self.settings.major == 2, &key, &self.header, &mut fd)
+                    .format(self.settings.major == 2, &key, obs_header, &mut fd)
                 {
                     Ok(_) => {
                         let _ = fd.flush();
@@ -180,7 +215,7 @@ impl Collecter {
                         self.buf.signals.clear();
                     },
                     Err(e) => {
-                        error!("{} formatting issue: {}", self.t, e);
+                        error!("{} formatting issue: {}", t, e);
                     },
                 }
             },
@@ -189,12 +224,49 @@ impl Collecter {
 
     fn header(&self) -> Header {
         let mut header = Header::default();
+        let mut obs_header = ObsHeader::default();
 
-        // TODO: observables need to be based on Ublox caps
+        header.version.major = self.settings.major;
+
+        if self.settings.crinex {
+            let mut crinex = CRINEX::default();
+
+            if self.settings.major == 2 {
+                crinex.version.major = 2;
+            } else {
+                crinex.version.major = 3;
+            }
+
+            obs_header.crinex = Some(crinex);
+        }
+
         if let Some(operator) = &self.settings.operator {
             header.observer = Some(operator.clone());
         }
 
+        if let Some(agency) = &self.settings.agency {
+            header.agency = Some(agency.clone());
+        }
+
+        for constellation in self.ubx_settings.constellations.iter() {
+            for observable in self.ubx_settings.observables.iter() {
+                if let Some(codes) = obs_header.codes.get_mut(constellation) {
+                    codes.push(observable.clone());
+                } else {
+                    obs_header
+                        .codes
+                        .insert(*constellation, vec![observable.clone()]);
+                }
+            }
+        }
+
+        header.obs = Some(obs_header);
         header
+    }
+
+    /// Returns collecter uptime (whole session)
+    fn uptime(&self, t: Epoch) -> Option<Duration> {
+        let t0 = self.t0?;
+        Some(t - t0)
     }
 }

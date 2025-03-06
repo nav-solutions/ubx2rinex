@@ -19,9 +19,8 @@ extern crate ublox;
 use thiserror::Error;
 
 use rinex::{
-    hatanaka::CRINEX,
     observation::HeaderFields as ObsHeader,
-    prelude::{Constellation, Duration, Epoch, Header, Observable, Rinex, TimeScale, Version, SV},
+    prelude::{Constellation, Duration, Epoch, Header, Observable, TimeScale, CRINEX, SV},
 };
 
 use env_logger::{Builder, Target};
@@ -29,10 +28,7 @@ use log::{debug, error, info, trace, warn};
 
 use tokio::sync::mpsc;
 
-use ublox::{
-    AlignmentToReferenceTime, GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef,
-    RecStatFlags,
-};
+use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
 mod cli;
 mod collecter;
@@ -44,6 +40,19 @@ use collecter::{rawxm::Rawxm, Collecter, Message};
 use device::Device;
 
 use utils::{gnss_id_to_constellation, to_timescale};
+
+#[derive(Clone)]
+pub struct UbloxSettings {
+    timescale: TimeScale,
+    sampling_period: Duration,
+    solutions_ratio: u32,
+    constellations: Vec<Constellation>,
+    observables: Vec<Observable>,
+    sn: Option<String>,
+    rx_clock: bool,
+    model: Option<String>,
+    firmware: Option<String>,
+}
 
 #[derive(Debug, Clone, Error)]
 pub enum Error {
@@ -84,16 +93,17 @@ pub async fn main() -> Result<(), Error> {
     let mut fix_flags = NavStatusFlags::empty(); // current fix flag
     let mut nav_status = NavStatusFlags2::Inactive;
 
-    // Serial port settings
+    // UBlox settings
     let port = cli.port();
     let baud_rate = cli.baud_rate().unwrap_or(115_200);
+    let ubx_settings = cli.ublox_settings();
 
     // RINEX settings
     let settings = cli.rinex_settings();
 
     let (tx, rx) = mpsc::channel(10);
 
-    let mut collecter = Collecter::new(settings, rx);
+    let mut collecter = Collecter::new(settings, ubx_settings.clone(), rx);
 
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
@@ -107,27 +117,13 @@ pub async fn main() -> Result<(), Error> {
     device.enable_nav_sat(&mut buffer);
     debug!("UBX-NAV-SAT enabled");
 
-    if cli.rx_clock() {
+    if ubx_settings.rx_clock {
         device.enable_nav_clock(&mut buffer);
         debug!("UBX-NAV-CLK enabled");
     }
 
-    let sampling = Duration::from_seconds(30.0);
-    let measure_rate_ms = (sampling.total_nanoseconds() / 1_000_000) as u16;
-
-    let nav_solutions_ratio = if measure_rate_ms > 10_000 {
-        1
-    } else if measure_rate_ms > 1_000 {
-        2
-    } else {
-        10
-    };
-
-    let time_ref = AlignmentToReferenceTime::Gps;
-    let timescale = to_timescale(time_ref);
-
-    device.apply_cfg_rate(&mut buffer, measure_rate_ms, nav_solutions_ratio, time_ref);
-    debug!("Measurement rate is {} ({:?})", sampling, time_ref);
+    // device.apply_cfg_rate(&mut buffer, measure_rate_ms, nav_solutions_ratio, time_ref);
+    // debug!("Measurement rate is {} ({:?})", sampling, time_ref);
 
     tokio::spawn(async move {
         collecter.run().await;
@@ -147,7 +143,8 @@ pub async fn main() -> Result<(), Error> {
                 PacketRef::RxmRawx(pkt) => {
                     let tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
                     let week = pkt.week();
-                    let t = Epoch::from_time_of_week(week as u32, tow_nanos, timescale);
+                    let t =
+                        Epoch::from_time_of_week(week as u32, tow_nanos, ubx_settings.timescale);
 
                     let stat = pkt.rec_stat();
 
@@ -245,9 +242,6 @@ pub async fn main() -> Result<(), Error> {
                     uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
                     trace!("uptime: {}", uptime);
                 },
-                PacketRef::NavClock(pkt) => {
-                    debug!("NAV CLK: {:?}", pkt);
-                },
                 PacketRef::NavEoe(pkt) => {
                     let itow = pkt.itow();
                     // reset Epoch
@@ -277,9 +271,6 @@ pub async fn main() -> Result<(), Error> {
                     // };
                     // let _iono = IonMessage::KlobucharModel(kbmodel);
                 },
-                /*
-                 * OBSERVATION: Receiver Clock
-                 */
                 PacketRef::NavClock(pkt) => {
                     let _bias = pkt.clk_b();
                     let _drift = pkt.clk_d();
