@@ -1,10 +1,7 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
+use rinex::prelude::{Constellation, Duration, TimeScale};
 
-use rinex::{
-    hardware::Receiver,
-    prelude::{Constellation, Duration},
-    production::SnapshotMode,
-};
+use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
 
 pub struct Cli {
     /// Arguments passed by user
@@ -38,14 +35,6 @@ impl Cli {
                             .required(false)
                             .value_name("Baudrate (u32)")
                             .help("Define serial port baud rate. Communications will not work if your U-Blox streams at a different data-rate. By default we use 115_200"),
-                    )
-                    .arg(
-                        Arg::new("model")
-                            .short('m')
-                            .long("model")
-                            .required(false)
-                            .value_name("Model")
-                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
                     )
                     .next_help_heading("U-Blox configuration")
                     .arg(
@@ -100,7 +89,25 @@ impl Cli {
                             .long("anti-spoofing")
                             .action(ArgAction::SetTrue)
                             .help("Makes sure anti jamming/spoofing is enabled. When enabled, it is automatically emphasized in the collected RINEX."))
+                    .arg(
+                        Arg::new("model")
+                            .short('m')
+                            .long("model")
+                            .required(false)
+                            .value_name("Model")
+                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
+                    )
                     .next_help_heading("RINEX Collection")
+                    .arg(
+                        Arg::new("name")
+                            .long("name")
+                            .short('n')
+                            .required(false)
+                            .action(ArgAction::Set)
+                            .help("Define a custom name. To respect standard naming conventions,
+this should be a 4 letter code, usually named after your geodetic marker.
+When not defined, the default value is \"UBXR\".")
+                    )
                     .arg(
                         Arg::new("prefix")
                             .long("prefix")
@@ -108,8 +115,9 @@ impl Cli {
                             .help("Custom directory prefix for output products. Default is none!"),
                     )
                     .arg(
-                        Arg::new("snapshot")
-                            .long("snapshot")
+                        Arg::new("period")
+                            .long("period")
+                            .short('p')
                             .action(ArgAction::Set)
                             .required(false)
                             .help("Define snapshot (=collection) mode")
@@ -139,6 +147,18 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .action(ArgAction::SetTrue)
                             .help("Upgrade RINEX revision to V4. You can also downgrade to RINEX V2 with --v2.
 We use V3 by default, because very few tools support V4, so we remain compatible.")
+                    )
+                    .arg(
+                        Arg::new("long")
+                            .short('l')
+                            .action(ArgAction::SetTrue)
+                            .help("Prefer long (V3 like) file names over short (V2) file names")
+                    )
+                    .arg(
+                        Arg::new("country")
+                            .short('c')
+                            .action(ArgAction::Set)
+                            .help("Specify country code (3 letter) in case of V3 file name. Default: \"FRA\"")
                     )
                     .arg(
                         Arg::new("agency")
@@ -185,7 +205,41 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         }
     }
 
-    pub fn constellations(&self) -> Vec<Constellation> {
+    /// Returns User serial port specification
+    pub fn port(&self) -> &str {
+        self.matches.get_one::<String>("port").unwrap()
+    }
+
+    /// Returns User baud rate specification
+    pub fn baud_rate(&self) -> Option<u32> {
+        let baud = self.matches.get_one::<String>("baudrate")?;
+        let baud = baud
+            .parse::<u32>()
+            .unwrap_or_else(|e| panic!("Invalid baud rate value: {}", e));
+        Some(baud)
+    }
+
+    fn gps(&self) -> bool {
+        self.matches.get_flag("gps")
+    }
+
+    fn galileo(&self) -> bool {
+        self.matches.get_flag("galileo")
+    }
+
+    fn bds(&self) -> bool {
+        self.matches.get_flag("bds")
+    }
+
+    fn qzss(&self) -> bool {
+        self.matches.get_flag("qzss")
+    }
+
+    fn glonass(&self) -> bool {
+        self.matches.get_flag("glonass")
+    }
+
+    fn constellations(&self) -> Vec<Constellation> {
         let mut constellations = Vec::<Constellation>::with_capacity(4);
 
         if self.gps() {
@@ -206,105 +260,11 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         constellations
     }
 
-    /// Returns User serial port specification
-    pub fn port(&self) -> &str {
-        self.matches.get_one::<String>("port").unwrap()
+    fn timescale(&self) -> TimeScale {
+        TimeScale::GPST
     }
 
-    /// Returns User baud rate specification
-    pub fn baud_rate(&self) -> Option<u32> {
-        let baud = self.matches.get_one::<String>("baudrate")?;
-        let baud = baud
-            .parse::<u32>()
-            .unwrap_or_else(|e| panic!("Invalid baud rate value: {}", e));
-        Some(baud)
-    }
-
-    pub fn gps(&self) -> bool {
-        self.matches.get_flag("gps")
-    }
-    pub fn galileo(&self) -> bool {
-        self.matches.get_flag("galileo")
-    }
-    pub fn bds(&self) -> bool {
-        self.matches.get_flag("bds")
-    }
-    pub fn qzss(&self) -> bool {
-        self.matches.get_flag("qzss")
-    }
-    pub fn glonass(&self) -> bool {
-        self.matches.get_flag("glonass")
-    }
-
-    pub fn no_obs_rinex(&self) -> bool {
-        self.matches.get_flag("no-obs")
-    }
-
-    pub fn rx_clock(&self) -> bool {
-        self.matches.get_flag("rx-clock")
-    }
-
-    pub fn nav_rinex(&self) -> bool {
-        self.matches.get_flag("nav")
-    }
-
-    pub fn anti_spoofing(&self) -> bool {
-        self.matches.get_flag("anti-spoofing")
-    }
-
-    pub fn profile(&self) -> Option<&String> {
-        self.matches.get_one::<String>("profile")
-    }
-
-    pub fn forced_rinex_v2(&self) -> bool {
-        self.matches.get_flag("v2")
-    }
-
-    pub fn forced_rinex_v4(&self) -> bool {
-        self.matches.get_flag("v4")
-    }
-
-    pub fn crinex(&self) -> bool {
-        self.matches.get_flag("crx")
-    }
-
-    pub fn gzip(&self) -> bool {
-        self.matches.get_flag("gzip")
-    }
-
-    pub fn agency(&self) -> Option<&String> {
-        self.matches.get_one::<String>("agency")
-    }
-
-    pub fn operator(&self) -> Option<&String> {
-        self.matches.get_one::<String>("operator")
-    }
-
-    pub fn observer(&self) -> Option<&String> {
-        self.matches.get_one::<String>("observer")
-    }
-
-    pub fn prefix(&self) -> Option<&String> {
-        self.matches.get_one::<String>("prefix")
-    }
-
-    fn rx_model(&self) -> String {
-        if let Some(model) = self.matches.get_one::<String>("model") {
-            model.to_string()
-        } else {
-            "".to_string()
-        }
-    }
-
-    pub fn receiver(&self) -> Receiver {
-        Receiver {
-            sn: "".to_string(),
-            model: self.rx_model(),
-            firmware: "".to_string(),
-        }
-    }
-
-    pub fn sampling(&self) -> Duration {
+    fn sampling_period(&self) -> Duration {
         if let Some(sampling) = self.matches.get_one::<String>("sampling") {
             let dt = sampling
                 .trim()
@@ -317,6 +277,86 @@ We use V3 by default, because very few tools support V4, so we remain compatible
             dt
         } else {
             Duration::from_milliseconds(30_000.0)
+        }
+    }
+
+    fn solutions_ratio(sampling_period: Duration) -> u16 {
+        let period_ms = (sampling_period.total_nanoseconds() / 1_000_000) as u16;
+        if period_ms > 10_000 {
+            1
+        } else if period_ms > 1_000 {
+            2
+        } else {
+            10
+        }
+    }
+
+    pub fn ublox_settings(&self) -> UbloxSettings {
+        let sampling_period = self.sampling_period();
+        UbloxSettings {
+            observables: Default::default(),
+            sampling_period,
+            timescale: self.timescale(),
+            constellations: self.constellations(),
+            rx_clock: self.matches.get_flag("rx-clock"),
+            solutions_ratio: Self::solutions_ratio(sampling_period),
+            sn: None,
+            firmware: None,
+            model: if let Some(model) = self.matches.get_one::<String>("model") {
+                Some(model.to_string())
+            } else {
+                None
+            },
+        }
+    }
+
+    pub fn rinex_settings(&self) -> RinexSettings {
+        RinexSettings {
+            short_filename: !self.matches.get_flag("long"),
+            gzip: self.matches.get_flag("gzip"),
+            crinex: self.matches.get_flag("crx"),
+            major: if self.matches.get_flag("v4") {
+                4
+            } else if self.matches.get_flag("v2") {
+                2
+            } else {
+                3
+            },
+            country: if let Some(country) = self.matches.get_one::<String>("country") {
+                country.to_string()
+            } else {
+                "FRA".to_string()
+            },
+            agency: if let Some(agency) = self.matches.get_one::<String>("agency") {
+                Some(agency.to_string())
+            } else {
+                None
+            },
+            operator: if let Some(operator) = self.matches.get_one::<String>("operator") {
+                Some(operator.to_string())
+            } else {
+                None
+            },
+            prefix: if let Some(prefix) = self.matches.get_one::<String>("prefix") {
+                Some(prefix.to_string())
+            } else {
+                None
+            },
+            name: if let Some(name) = self.matches.get_one::<String>("name") {
+                name.to_string()
+            } else {
+                "UBXR".to_string()
+            },
+            period: if let Some(period) = self.matches.get_one::<String>("period") {
+                let dt = period
+                    .trim()
+                    .parse::<Duration>()
+                    .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
+
+                dt
+            } else {
+                Duration::from_hours(1.0)
+            },
         }
     }
 }

@@ -128,6 +128,17 @@ and dumps it into supported RINEX formats. It is important to keep in mind that,
 a meaningful (and correct) RINEX header, we can only redact it after completion of a first entire epoch,
 every time a new gathering period starts.
 
+File name conventions
+=====================
+
+`ubx2rinex` follows and uses RINEX standard conventions. By default we will generate
+RINEX `V2` (short) filenames, as it only requires one field to be complete.
+By default, this field is set to `UBX`, but you can change that with `--name`:
+
+```bash
+RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps --name M8T
+```
+
 Signal Collection
 =================
 
@@ -219,7 +230,33 @@ NB:
 - the first signal observation is released everyday at midnight 00:00:00 in the main Timescale
 - the last signal observation is released everyday at 23:59:30 in the main Timescale
 
-Snapshot period interruption
-============================
+File rotation and descriptors
+=============================
 
-`ubx2rinex` does not support graceful interruption. If you abort the ongoing period by killing this program, you may wind-up with an incomplete epoch at the very end.
+`ubx2rinex` owns the File descriptor with write access (only) until the end of this period.  
+That means you can only read the file until the end of the period.
+Deleting the file descriptor while the program is actively collecting will the program to panic.
+
+At the end of each period, the file descriptor is released and you can fully process it.   
+The file pointer is then incremented, using standard naming conventions.
+
+`ubx2rinex` will provide content "as soon as" it exists (+/- some file descriptor access, that we
+try to keep efficient). This means that exploitation of this program is compatible with real-time
+watching of the file being produced and each new symbol is published fairly quickly.
+
+Program interruption and release
+================================
+
+You should halt `ubx2rinex` by sending a `SHUTDOWN` (Ctrl+C) event. The program will
+catch the signal, notify it should halt and will publish the ongoing epoch.
+Pending observations are pushed into the file buffer and the file descriptor is released.  
+In other words, `ubx2rinex` ensures all available is published even on program termination.
+
+no-std
+======
+
+This program relies on both the `ubx` parser and the `rinex` library.  
+The first one supports `no-std`, but it is unfortunately not true for the latter.  
+We will see if we can provide some very reduced, `no-std` compatible portions of the `rinex` library
+in the future, especially the file production side. 
+This is not scheduled work as of today. Feel free to join in if you want to see this happen sooner.

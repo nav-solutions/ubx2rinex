@@ -16,24 +16,16 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
-use thiserror::Error;
-
 use std::str::FromStr;
 
-use rinex::{
-    hardware::Receiver,
-    hatanaka::CRINEX,
-    observation::HeaderFields as ObsHeader,
-    prelude::{Constellation, Duration, Epoch, Header, Observable, Rinex, TimeScale, Version, SV},
-};
+use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
 
 use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
 
-use ublox::{
-    AlignmentToReferenceTime, GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef,
-    RecStatFlags,
-};
+use tokio::sync::mpsc;
+
+use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
 mod cli;
 mod collecter;
@@ -41,30 +33,37 @@ mod device;
 mod utils;
 
 use cli::Cli;
-use collecter::{Collecter, Rawxm};
+use collecter::{rawxm::Rawxm, Collecter, Message};
 use device::Device;
 
-use utils::{gnss_id_to_constellation, to_timescale};
+use utils::to_constellation;
 
-#[derive(Debug, Clone, Error)]
-pub enum Error {
-    #[error("Unknown constellation id: #{0}")]
-    UnknownConstellationId(u8),
+#[derive(Clone)]
+pub struct UbloxSettings {
+    timescale: TimeScale,
+    sampling_period: Duration,
+    solutions_ratio: u16,
+    constellations: Vec<Constellation>,
+    observables: Vec<Observable>,
+    sn: Option<String>,
+    rx_clock: bool,
+    model: Option<String>,
+    firmware: Option<String>,
 }
 
-fn identify_constellation(id: u8) -> Result<Constellation, Error> {
-    match id {
-        0 => Ok(Constellation::GPS),
-        1 => Ok(Constellation::Galileo),
-        2 => Ok(Constellation::Glonass),
-        3 => Ok(Constellation::BeiDou),
-        _ => Err(Error::UnknownConstellationId(id)),
-    }
+async fn wait_sigterm(tx: mpsc::Sender<Message>) {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to wait for SHUTDOWN signal");
+
+    let _ = tx.send(Message::Shutdown);
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    panic!("terminated!");
 }
 
-fn disable_obs_rinex(device: &mut Device) {}
-
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+pub async fn main() {
     // pretty_env_logger::init();
 
     let mut builder = Builder::from_default_env();
@@ -78,8 +77,8 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     // cli
     let cli = Cli::new();
 
-    let deploy_time =
-        Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system (OS) time: {}", e));
+    // RINEX settings
+    let settings = cli.rinex_settings();
 
     // init
     let mut buffer = [0; 8192];
@@ -89,152 +88,52 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut fix_flags = NavStatusFlags::empty(); // current fix flag
     let mut nav_status = NavStatusFlags2::Inactive;
 
-    // Serial port settings
+    // UBlox settings
     let port = cli.port();
     let baud_rate = cli.baud_rate().unwrap_or(115_200);
 
-    // U-Blox setup
-    let rx_clock = cli.rx_clock();
-    let sampling = cli.sampling();
-    let anti_spoofing = cli.anti_spoofing();
+    let mut ubx_settings = cli.ublox_settings();
 
-    let profile = match cli.profile() {
-        Some(profile) => profile.to_string(),
-        _ => "portable".to_string(),
-    };
-
-    // RINEX collection options
-    let nav_rinex = cli.nav_rinex();
-    let no_obs_rinex = cli.no_obs_rinex();
-
-    let constellations = cli.constellations();
-    let constellation = if constellations.len() == 1 {
-        constellations[0]
+    let (c1c, l1c, d1c) = if settings.major == 2 {
+        (
+            Observable::from_str("C1").unwrap(),
+            Observable::from_str("L1").unwrap(),
+            Observable::from_str("D1").unwrap(),
+        )
     } else {
-        Constellation::Mixed
+        (
+            Observable::from_str("C1C").unwrap(),
+            Observable::from_str("L1C").unwrap(),
+            Observable::from_str("D1C").unwrap(),
+        )
     };
 
-    let gzip = cli.gzip();
-    let crinex = cli.crinex();
-    let forced_v2 = cli.forced_rinex_v2();
-    let forced_v4 = cli.forced_rinex_v4();
+    ubx_settings.observables.push(c1c);
+    ubx_settings.observables.push(l1c);
+    ubx_settings.observables.push(d1c);
 
-    let prefix = if let Some(prefix) = cli.prefix() {
-        prefix.to_string()
-    } else {
-        "".to_string()
-    };
+    let (tx, rx) = mpsc::channel(32);
+    let sigterm_tx = tx.clone();
 
-    let major = if forced_v4 {
-        4
-    } else if forced_v2 {
-        2
-    } else {
-        3
-    };
+    let mut collecter = Collecter::new(settings, ubx_settings.clone(), rx);
 
-    let mut rcvr = cli.receiver();
+    tokio::spawn(async move {
+        wait_sigterm(sigterm_tx).await;
+    });
+
+    tokio::spawn(async move {
+        collecter.run().await;
+    });
 
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
-    // Device configurations
-    device
-        .read_version(&mut buffer, &mut rcvr)
-        .unwrap_or_else(|e| panic!("Failed to read firmware version: {}", e));
+    device.configure(&ubx_settings, &mut buffer, tx.clone());
 
-    device
-        .read_gnss(&mut buffer)
-        .unwrap_or_else(|e| panic!("Failed to read GNSS constellations: {}", e));
+    let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
 
-    let mut header = Header::default()
-        .with_version(Version::new(major, 0))
-        .with_receiver(rcvr)
-        .with_constellation(constellation);
+    info!("{} - program deployed", now);
 
-    if let Some(agency) = cli.agency() {
-        header.agency = Some(agency.clone());
-    }
-
-    if let Some(observer) = cli.observer() {
-        header.observer = Some(observer.clone());
-    }
-
-    if let Some(observer) = cli.observer() {
-        header.observer = Some(observer.clone());
-    }
-
-    if let Some(operator) = cli.operator() {
-        header.run_by = Some(operator.clone());
-    }
-
-    let program = format!("rtk-rs/ubx2rinex v{}", env!("CARGO_PKG_VERSION"));
-
-    header.program = Some(program.clone());
-
-    let mut obs_header = ObsHeader::default();
-
-    if crinex {
-        if forced_v2 {
-            obs_header.crinex = Some(
-                CRINEX::default()
-                    .with_date(deploy_time)
-                    .with_version(Version::new(1, 0))
-                    .with_prog(&program),
-            );
-        } else {
-            obs_header.crinex = Some(
-                CRINEX::default()
-                    .with_date(deploy_time)
-                    .with_version(Version::new(3, 0))
-                    .with_prog(&program),
-            );
-        }
-    }
-
-    device.enable_nav_eoe(&mut buffer);
-    debug!("UBX-NAV-EOE enabled");
-
-    device.enable_nav_pvt(&mut buffer);
-    debug!("UBX-NAV-PVT enabled");
-
-    if rx_clock {
-        device.enable_nav_clock(&mut buffer);
-        debug!("UBX-NAV-CLK enabled");
-    }
-
-    device.enable_nav_sat(&mut buffer);
-    debug!("UBX-NAV-PVT enabled");
-
-    let measure_rate_ms = (sampling.total_nanoseconds() / 1_000_000) as u16;
-
-    let nav_solutions_ratio = if measure_rate_ms > 10_000 {
-        1
-    } else if measure_rate_ms > 1_000 {
-        2
-    } else {
-        10
-    };
-
-    let time_ref = AlignmentToReferenceTime::Gps;
-    let timescale = to_timescale(time_ref);
-
-    device.apply_cfg_rate(&mut buffer, measure_rate_ms, nav_solutions_ratio, time_ref);
-    debug!("Measurement rate is {} ({:?})", sampling, time_ref);
-
-    if no_obs_rinex {
-    } else {
-        device.enable_obs_rinex(&mut buffer);
-        header.obs = Some(obs_header);
-        info!("Observation RINEX mode deployed");
-    }
-
-    let rinex = Rinex::basic_obs().with_header(header);
-
-    let mut t = deploy_time.to_time_scale(timescale);
-    let mut collecter = Collecter::new(&prefix, t, rinex, crinex, false);
-
-    info!("{} - program deployed", t);
     loop {
         let _ = device.consume_all_cb(&mut buffer, |packet| {
             match packet {
@@ -245,7 +144,9 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 PacketRef::RxmRawx(pkt) => {
                     let tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
                     let week = pkt.week();
-                    t = Epoch::from_time_of_week(week as u32, tow_nanos, timescale);
+
+                    let t =
+                        Epoch::from_time_of_week(week as u32, tow_nanos, ubx_settings.timescale);
 
                     let stat = pkt.rec_stat();
 
@@ -268,7 +169,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let gnss_id = meas.gnss_id();
                         let cno = meas.cno();
 
-                        let constell = gnss_id_to_constellation(gnss_id);
+                        let constell = to_constellation(gnss_id);
                         if constell.is_none() {
                             debug!("unknown constellation: #{}", gnss_id);
                             continue;
@@ -279,8 +180,16 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                         let prn = meas.sv_id();
                         let sv = SV::new(constell, prn);
 
-                        let rawxm = Rawxm::new(pr, cp, dop, cno);
-                        collecter.new_observation(t, sv, 0, rawxm);
+                        let rawxm = Rawxm::new(t, sv, pr, cp, dop, cno);
+
+                        match tx.try_send(Message::Measurement(rawxm)) {
+                            Ok(_) => {
+                                debug!("{}", rawxm);
+                            },
+                            Err(e) => {
+                                error!("{}({}) missed measurement: {}", t, sv, e);
+                            },
+                        }
                     }
                 },
                 PacketRef::MonHw(_pkt) => {
@@ -292,24 +201,29 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                 PacketRef::NavSat(pkt) => {
                     debug!("nav-sat: {:?}", pkt);
                     for sv in pkt.svs() {
-                        let gnss = identify_constellation(sv.gnss_id());
-                        if gnss.is_ok() {
-                            let _elev = sv.elev();
-                            let _azim = sv.azim();
-                            let _pr_res = sv.pr_res();
-                            let _flags = sv.flags();
+                        let constellation = to_constellation(sv.gnss_id());
 
-                            let _sv = SV {
-                                constellation: gnss.unwrap(),
-                                prn: sv.sv_id(),
-                            };
-
-                            // flags.sv_used()
-                            //flags.health();
-                            //flags.quality_ind();
-                            //flags.differential_correction_available();
-                            //flags.ephemeris_available();
+                        if constellation.is_none() {
+                            continue;
                         }
+
+                        let constellation = constellation.unwrap();
+
+                        let _elev = sv.elev();
+                        let _azim = sv.azim();
+                        let _pr_res = sv.pr_res();
+                        let _flags = sv.flags();
+
+                        let _sv = SV {
+                            constellation,
+                            prn: sv.sv_id(),
+                        };
+
+                        // flags.sv_used()
+                        //flags.health();
+                        //flags.quality_ind();
+                        //flags.differential_correction_available();
+                        //flags.ephemeris_available();
                     }
                 },
                 PacketRef::NavTimeUTC(pkt) => {
@@ -334,9 +248,6 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     nav_status = pkt.flags2();
                     uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
                     trace!("uptime: {}", uptime);
-                },
-                PacketRef::NavClock(pkt) => {
-                    debug!("NAV CLK: {:?}", pkt);
                 },
                 PacketRef::NavEoe(pkt) => {
                     let itow = pkt.itow();
@@ -367,14 +278,16 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
                     // };
                     // let _iono = IonMessage::KlobucharModel(kbmodel);
                 },
-                /*
-                 * OBSERVATION: Receiver Clock
-                 */
                 PacketRef::NavClock(pkt) => {
-                    let _bias = pkt.clk_b();
-                    let _drift = pkt.clk_d();
-                    // pkt.t_acc(); // phase accuracy
-                    // pkt.f_acc(); // frequency accuracy
+                    let clock = pkt.clk_b();
+                    match tx.try_send(Message::Clock(clock)) {
+                        Ok(_) => {
+                            debug!("{}", clock);
+                        },
+                        Err(e) => {
+                            error!("missed clock state: {}", e);
+                        },
+                    }
                 },
                 /*
                  * Errors, Warnings
