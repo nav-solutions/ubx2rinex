@@ -36,14 +36,6 @@ impl Cli {
                             .value_name("Baudrate (u32)")
                             .help("Define serial port baud rate. Communications will not work if your U-Blox streams at a different data-rate. By default we use 115_200"),
                     )
-                    .arg(
-                        Arg::new("model")
-                            .short('m')
-                            .long("model")
-                            .required(false)
-                            .value_name("Model")
-                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
-                    )
                     .next_help_heading("U-Blox configuration")
                     .arg(
                         Arg::new("gps")
@@ -97,6 +89,14 @@ impl Cli {
                             .long("anti-spoofing")
                             .action(ArgAction::SetTrue)
                             .help("Makes sure anti jamming/spoofing is enabled. When enabled, it is automatically emphasized in the collected RINEX."))
+                    .arg(
+                        Arg::new("model")
+                            .short('m')
+                            .long("model")
+                            .required(false)
+                            .value_name("Model")
+                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
+                    )
                     .next_help_heading("RINEX Collection")
                     .arg(
                         Arg::new("name")
@@ -293,7 +293,6 @@ We use V3 by default, because very few tools support V4, so we remain compatible
 
     pub fn ublox_settings(&self) -> UbloxSettings {
         let sampling_period = self.sampling_period();
-
         UbloxSettings {
             observables: Default::default(),
             sampling_period,

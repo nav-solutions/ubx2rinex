@@ -235,6 +235,7 @@ File rotation and descriptors
 
 `ubx2rinex` owns the File descriptor with write access (only) until the end of this period.  
 That means you can only read the file until the end of the period.
+Deleting the file descriptor while the program is actively collecting will the program to panic.
 
 At the end of each period, the file descriptor is released and you can fully process it.   
 The file pointer is then incremented, using standard naming conventions.
@@ -243,10 +244,10 @@ The file pointer is then incremented, using standard naming conventions.
 try to keep efficient). This means that exploitation of this program is compatible with real-time
 watching of the file being produced and each new symbol is published fairly quickly.
 
-Release period interruption
-===========================
+Program interruption and release
+================================
 
-You should halt `ubx2rinex` by sending a `SIGTERM` (Ctrl+C) event. The program will
+You should halt `ubx2rinex` by sending a `SHUTDOWN` (Ctrl+C) event. The program will
 catch the signal, notify it should halt and will publish the ongoing epoch.
 Pending observations are pushed into the file buffer and the file descriptor is released.  
 In other words, `ubx2rinex` ensures all available is published even on program termination.

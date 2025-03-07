@@ -16,6 +16,8 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
+use std::str::FromStr;
+
 use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
 
 use env_logger::{Builder, Target};
@@ -49,6 +51,17 @@ pub struct UbloxSettings {
     firmware: Option<String>,
 }
 
+async fn wait_sigterm(tx: mpsc::Sender<Message>) {
+    tokio::signal::ctrl_c()
+        .await
+        .expect("failed to wait for SHUTDOWN signal");
+
+    let _ = tx.send(Message::Shutdown);
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+    panic!("terminated!");
+}
+
 #[tokio::main]
 pub async fn main() {
     // pretty_env_logger::init();
@@ -64,6 +77,9 @@ pub async fn main() {
     // cli
     let cli = Cli::new();
 
+    // RINEX settings
+    let settings = cli.rinex_settings();
+
     // init
     let mut buffer = [0; 8192];
     let mut uptime = Duration::default();
@@ -75,14 +91,35 @@ pub async fn main() {
     // UBlox settings
     let port = cli.port();
     let baud_rate = cli.baud_rate().unwrap_or(115_200);
-    let ubx_settings = cli.ublox_settings();
 
-    // RINEX settings
-    let settings = cli.rinex_settings();
+    let mut ubx_settings = cli.ublox_settings();
+
+    let (c1c, l1c, d1c) = if settings.major == 2 {
+        (
+            Observable::from_str("C1").unwrap(),
+            Observable::from_str("L1").unwrap(),
+            Observable::from_str("D1").unwrap(),
+        )
+    } else {
+        (
+            Observable::from_str("C1C").unwrap(),
+            Observable::from_str("L1C").unwrap(),
+            Observable::from_str("D1C").unwrap(),
+        )
+    };
+
+    ubx_settings.observables.push(c1c);
+    ubx_settings.observables.push(l1c);
+    ubx_settings.observables.push(d1c);
 
     let (tx, rx) = mpsc::channel(32);
+    let sigterm_tx = tx.clone();
 
     let mut collecter = Collecter::new(settings, ubx_settings.clone(), rx);
+
+    tokio::spawn(async move {
+        wait_sigterm(sigterm_tx).await;
+    });
 
     tokio::spawn(async move {
         collecter.run().await;
@@ -242,10 +279,15 @@ pub async fn main() {
                     // let _iono = IonMessage::KlobucharModel(kbmodel);
                 },
                 PacketRef::NavClock(pkt) => {
-                    let _bias = pkt.clk_b();
-                    let _drift = pkt.clk_d();
-                    // pkt.t_acc(); // phase accuracy
-                    // pkt.f_acc(); // frequency accuracy
+                    let clock = pkt.clk_b();
+                    match tx.try_send(Message::Clock(clock)) {
+                        Ok(_) => {
+                            debug!("{}", clock);
+                        },
+                        Err(e) => {
+                            error!("missed clock state: {}", e);
+                        },
+                    }
                 },
                 /*
                  * Errors, Warnings

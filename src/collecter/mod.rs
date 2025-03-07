@@ -3,20 +3,23 @@ use std::{
     str::FromStr,
 };
 
-use rinex::prelude::{
-    //Carrier,
-    //Constellation,
-    Duration,
-    Epoch,
-    //TimeScale,
-    CRINEX,
+use rinex::{
+    observation::ClockObservation,
+    prelude::{
+        //Carrier,
+        //Constellation,
+        Duration,
+        Epoch,
+        //TimeScale,
+        CRINEX,
+    },
 };
 
 use tokio::sync::mpsc::Receiver;
 
 // use itertools::Itertools;
 
-use log::{debug, error};
+use log::error;
 
 use rinex::{
     observation::HeaderFields as ObsHeader,
@@ -37,19 +40,21 @@ use fd::FileDescriptor;
 use rawxm::Rawxm;
 use settings::Settings;
 
-#[derive(Debug, Default, Copy, Clone)]
-enum State {
-    #[default]
-    FirmwareVersion,
-    Constellations,
-    Observables,
-    Header,
-    Collecting,
-    Release,
-}
+// #[derive(Debug, Default, Copy, Clone)]
+// enum State {
+//     #[default]
+//     FirmwareVersion,
+//     Constellations,
+//     Observables,
+//     Header,
+//     Collecting,
+//     Release,
+// }
 
 #[derive(Debug)]
 pub enum Message {
+    Shutdown,
+    Clock(i32),
     Measurement(Rawxm),
     FirmwareVersion(String),
 }
@@ -57,11 +62,10 @@ pub enum Message {
 pub struct Collecter {
     t: Option<Epoch>,
     t0: Option<Epoch>,
-    enabled: bool,
     buf: Observations,
-    header: Option<Header>,
+    obs_header: Option<ObsHeader>,
     rx: Receiver<Message>,
-    state: State,
+    shutdown: bool,
     settings: Settings,
     ubx_settings: UbloxSettings,
     fd: Option<BufWriter<FileDescriptor>>,
@@ -73,14 +77,13 @@ impl Collecter {
         Self {
             rx,
             fd: None,
-            t: None,
             t0: None,
+            t: None,
             settings,
-            enabled: true,
-            header: None,
+            shutdown: false,
+            obs_header: None,
             ubx_settings: ublox,
             buf: Observations::default(),
-            state: Default::default(),
         }
     }
 
@@ -97,12 +100,38 @@ impl Collecter {
                     Message::FirmwareVersion(version) => {
                         self.ubx_settings.firmware = Some(version.to_string());
                     },
+
+                    Message::Shutdown => {
+                        if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
+                            self.release_epoch();
+                        }
+                        return;
+                    },
+
+                    Message::Clock(clock) => {
+                        let bias = (clock as f64) * 1.0E-3;
+                        let mut clock = ClockObservation::default();
+                        clock.set_offset_s(Default::default(), bias);
+                        self.buf.clock = Some(clock);
+                    },
+
                     Message::Measurement(rawxm) => {
                         if self.t0.is_none() {
                             self.t0 = Some(rawxm.t);
+                            self.release_header();
                         }
 
-                        self.t = Some(rawxm.t);
+                        if self.t.is_none() {
+                            self.t = Some(rawxm.t);
+                        }
+
+                        let t = self.t.unwrap();
+
+                        if rawxm.t > t {
+                            if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
+                                self.release_epoch();
+                            }
+                        }
 
                         let c1c = if self.settings.major == 3 {
                             Observable::from_str("C1C").unwrap()
@@ -145,97 +174,67 @@ impl Collecter {
                             value: rawxm.dop as f64,
                             observable: d1c,
                         });
+
+                        self.t = Some(rawxm.t);
                     },
                 },
-                Err(e) => {
+                Err(_) => {
                     tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
                 },
             }
 
-            match self.state {
-                State::FirmwareVersion => {
-                    if self.ubx_settings.firmware.is_some() {
-                        self.state = State::Constellations;
-                    }
-                },
-                State::Constellations => {
-                    self.state = State::Observables;
-                },
-                State::Observables => {
-                    if self.enabled {
-                        self.state = State::Header;
-                    }
-                },
-                State::Header => {
-                    if self.t0.is_some() {
-                        let t0 = self.t0.unwrap();
-
-                        // obtain new file, release header
-                        let mut fd = BufWriter::new(self.fd(t0));
-
-                        let header = self.build_header();
-
-                        header.format(&mut fd).unwrap_or_else(|e| {
-                            panic!(
-                                "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
-                                e
-                            )
-                        });
-
-                        let _ = fd.flush();
-
-                        self.fd = Some(fd);
-                        self.header = Some(header);
-                        self.state = State::Collecting;
-                    }
-                },
-
-                State::Collecting => {
-                    if self.t.is_some() {
-                        if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
-                            self.state = State::Release;
-                        }
-                    }
-                },
-
-                State::Release => {
-                    let t = self.t.unwrap();
-
-                    let key = ObsKey {
-                        epoch: t,
-                        flag: EpochFlag::Ok, // TODO,
-                    };
-
-                    let mut fd = self.fd.as_mut().unwrap();
-
-                    let header = self
-                        .header
-                        .as_ref()
-                        .expect("internal error: undefined Header");
-
-                    let obs_header = header
-                        .obs
-                        .as_ref()
-                        .expect("internal error: missing Observation header");
-
-                    match self
-                        .buf
-                        .format(self.settings.major == 2, &key, obs_header, &mut fd)
-                    {
-                        Ok(_) => {
-                            let _ = fd.flush();
-                            self.buf.clock = None;
-                            self.buf.signals.clear();
-                            self.state = State::Collecting;
-                        },
-                        Err(e) => {
-                            error!("{} formatting issue: {}", t, e);
-                        },
-                    }
-                },
-            }
-
             tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+        }
+    }
+
+    fn release_header(&mut self) {
+        let t0 = self.t0.unwrap();
+
+        // obtain new file, release header
+        let mut fd = BufWriter::new(self.fd(t0));
+
+        let header = self.build_header();
+
+        header.format(&mut fd).unwrap_or_else(|e| {
+            panic!(
+                "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
+                e
+            )
+        });
+
+        let _ = fd.flush();
+
+        self.fd = Some(fd);
+        self.obs_header = Some(header.obs.unwrap().clone());
+    }
+
+    fn release_epoch(&mut self) {
+        let t = self.t.unwrap();
+
+        let key = ObsKey {
+            epoch: t,
+            flag: EpochFlag::Ok, // TODO,
+        };
+
+        let mut fd = self.fd.as_mut().unwrap();
+
+        let obs_header = self
+            .obs_header
+            .as_ref()
+            .expect("internal error: missing Observation header");
+
+        match self
+            .buf
+            .format(self.settings.major == 2, &key, obs_header, &mut fd)
+        {
+            Ok(_) => {
+                let _ = fd.flush();
+                self.buf.clock = None;
+                self.buf.signals.clear();
+            },
+            Err(e) => {
+                error!("{} formatting issue: {}", t, e);
+            },
         }
     }
 

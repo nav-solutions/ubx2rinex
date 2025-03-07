@@ -5,10 +5,12 @@ use ublox::{
     UbxPacketMeta, UbxPacketRequest,
 };
 
+use std::io::Write;
+
 use serialport::SerialPort;
 use std::time::Duration;
 
-use crate::utils::{constell_mask_to_string, from_timescale};
+use crate::utils::from_timescale;
 
 use log::{debug, error, info};
 
@@ -57,7 +59,7 @@ impl Device {
         let parser = Parser::default();
         let mut dev = Self { port, parser };
 
-        for portid in [UartPortId::Usb, UartPortId::Uart1, UartPortId::Uart2] {
+        for portid in [UartPortId::Uart1, UartPortId::Uart2] {
             // Enable UBX protocol on selected UART port
             dev
             .write_all(
@@ -254,28 +256,28 @@ impl Device {
             .unwrap_or_else(|e| panic!("UBX-RXM-PVT error: {}", e));
     }
 
-    pub fn read_gnss(&mut self, buffer: &mut [u8]) -> std::io::Result<()> {
-        self.write_all(&UbxPacketRequest::request_for::<MonGnss>().into_packet_bytes())
-            .unwrap_or_else(|e| panic!("Failed to request firmware version: {}", e));
+    // pub fn read_gnss(&mut self, buffer: &mut [u8]) -> std::io::Result<()> {
+    //     self.write_all(&UbxPacketRequest::request_for::<MonGnss>().into_packet_bytes())
+    //         .unwrap_or_else(|e| panic!("Failed to request firmware version: {}", e));
 
-        let mut packet_found = false;
-        while !packet_found {
-            self.consume_all_cb(buffer, |packet| {
-                if let PacketRef::MonGnss(pkt) = packet {
-                    info!(
-                        "Enabled constellations: {}",
-                        constell_mask_to_string(pkt.enabled())
-                    );
-                    info!(
-                        "Supported constellations: {}",
-                        constell_mask_to_string(pkt.supported())
-                    );
-                    packet_found = true;
-                }
-            })?;
-        }
-        Ok(())
-    }
+    //     let mut packet_found = false;
+    //     while !packet_found {
+    //         self.consume_all_cb(buffer, |packet| {
+    //             if let PacketRef::MonGnss(pkt) = packet {
+    //                 info!(
+    //                     "Enabled constellations: {}",
+    //                     constell_mask_to_string(pkt.enabled())
+    //                 );
+    //                 info!(
+    //                     "Supported constellations: {}",
+    //                     constell_mask_to_string(pkt.supported())
+    //                 );
+    //                 packet_found = true;
+    //             }
+    //         })?;
+    //     }
+    //     Ok(())
+    // }
 
     /// Reads the serial port, converting timeouts into "no data received"
     fn read_port(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
