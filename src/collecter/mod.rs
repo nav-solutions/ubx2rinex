@@ -54,7 +54,7 @@ use settings::Settings;
 #[derive(Debug)]
 pub enum Message {
     Shutdown,
-    Clock(i32),
+    Clock(f64),
     Measurement(Rawxm),
     FirmwareVersion(String),
 }
@@ -109,7 +109,7 @@ impl Collecter {
                     },
 
                     Message::Clock(clock) => {
-                        let bias = (clock as f64) * 1.0E-3;
+                        let bias = clock * 1.0E-3;
                         let mut clock = ClockObservation::default();
                         clock.set_offset_s(Default::default(), bias);
                         self.buf.clock = Some(clock);
