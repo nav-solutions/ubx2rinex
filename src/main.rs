@@ -279,7 +279,7 @@ pub async fn main() {
                     // let _iono = IonMessage::KlobucharModel(kbmodel);
                 },
                 PacketRef::NavClock(pkt) => {
-                    let clock = pkt.clk_b();
+                    let clock = pkt.clk_bias();
                     match tx.try_send(Message::Clock(clock)) {
                         Ok(_) => {
                             debug!("{}", clock);
