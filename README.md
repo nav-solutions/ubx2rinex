@@ -43,7 +43,7 @@ When building the application, you need to select the `UBX` protocol to be suppo
 The default (previous example) being `UBX v23`. We support the following protocol releases
 
 | UBX Protocol | Compilation flag |
-:--------------:------------------:
+|--------------|------------------|
 | v23          : `ubx_proto23`    |
 | v27          : `ubx_proto27`    |
 | v31          : `ubx_proto31`    |
