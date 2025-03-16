@@ -17,10 +17,14 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - name: Default build
+          - name: Build (default)
             opts: -r
-          - name: All Features
-            opts: --all-features
+          - name: Build (UBX23)
+            opts: --features ubx_proto23
+          - name: Build (UBX27)
+            opts: --features ubx_proto27
+          - name: Build (UBX31)
+            opts: --features ubx_proto31
 
     steps:
     - uses: actions/checkout@v3

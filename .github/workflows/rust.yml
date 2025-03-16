@@ -22,10 +22,13 @@ jobs:
         sudo apt-get install -y libudev-dev
 
     - name: Build
-      run: cargo build
-    - name: Build (All features)
-      run: cargo build --all-features
-    - name: Build (All features)
-      run: cargo build --all-features
+      run: cargo build (Default)
+    
+    - name: Build (UBX27)
+      run: cargo build --features ubx_proto27
+    
+    - name: Build (UBX31)
+      run: cargo build --features ubx_proto31
+
     - name: Coding style
       run: cargo fmt --all -- --check
