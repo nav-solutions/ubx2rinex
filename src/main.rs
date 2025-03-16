@@ -25,11 +25,15 @@ use log::{debug, error, info, trace, warn};
 
 use tokio::sync::mpsc;
 
-use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
+use ublox::{
+    cfg_val::CfgVal, CfgLayer, CfgValSetBuilder, GpsFix, NavStatusFlags, NavStatusFlags2,
+    NavTimeUtcFlags, PacketRef, RecStatFlags,
+};
 
 mod cli;
 mod collecter;
 mod device;
+mod ubx;
 mod utils;
 
 use cli::Cli;
@@ -38,27 +42,13 @@ use device::Device;
 
 use utils::to_constellation;
 
-#[derive(Clone)]
-pub struct UbloxSettings {
-    timescale: TimeScale,
-    sampling_period: Duration,
-    solutions_ratio: u16,
-    constellations: Vec<Constellation>,
-    observables: Vec<Observable>,
-    sn: Option<String>,
-    rx_clock: bool,
-    model: Option<String>,
-    firmware: Option<String>,
-}
+pub use ubx::Settings as UloxSettings;
 
 async fn wait_sigterm(tx: mpsc::Sender<Message>) {
     tokio::signal::ctrl_c()
         .await
         .expect("failed to wait for SHUTDOWN signal");
-
     let _ = tx.send(Message::Shutdown);
-
-    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
     panic!("terminated!");
 }
 
