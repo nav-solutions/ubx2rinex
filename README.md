@@ -44,9 +44,9 @@ The default (previous example) being `UBX v23`. We support the following protoco
 
 | UBX Protocol | Compilation flag |
 |--------------|------------------|
-| v23          : `ubx_proto23`    |
-| v27          : `ubx_proto27`    |
-| v31          : `ubx_proto31`    |
+| v23          | `ubx_proto23`    |
+| v27          | `ubx_proto27`    |
+| v31          | `ubx_proto31`    |
 
 ## Getting started
 
