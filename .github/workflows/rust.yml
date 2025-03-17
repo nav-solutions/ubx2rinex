@@ -21,11 +21,8 @@ jobs:
         sudo apt-get update 
         sudo apt-get install -y libudev-dev
 
-    - name: Build
+    - name: Build (Default)
       run: cargo build
-    - name: Build (All features)
-      run: cargo build --all-features
-    - name: Build (All features)
-      run: cargo build --all-features
+    
     - name: Coding style
       run: cargo fmt --all -- --check

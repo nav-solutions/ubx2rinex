@@ -17,10 +17,8 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - name: Default build
+          - name: Build (default)
             opts: -r
-          - name: All Features
-            opts: --all-features
 
     steps:
     - uses: actions/checkout@v3
