@@ -42,7 +42,7 @@ use device::Device;
 
 use utils::to_constellation;
 
-pub use ubx::Settings as UloxSettings;
+pub use ubx::Settings as UbloxSettings;
 
 async fn wait_sigterm(tx: mpsc::Sender<Message>) {
     tokio::signal::ctrl_c()
