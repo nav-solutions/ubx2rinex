@@ -24,23 +24,5 @@ jobs:
     - name: Build (Default)
       run: cargo build
     
-    - name: Clean
-      run: cargo clean
-    
-    - name: Build (UBX23)
-      run: cargo build --features ubx_proto23
-    
-    - name: Clean
-      run: cargo clean
-    
-    - name: Build (UBX27)
-      run: cargo build --features ubx_proto27
-    
-    - name: Clean
-      run: cargo clean
-    
-    - name: Build (UBX31)
-      run: cargo build --features ubx_proto31
-
     - name: Coding style
       run: cargo fmt --all -- --check
