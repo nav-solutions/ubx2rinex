@@ -39,21 +39,8 @@ And build it using cargo:
 cargo build -r
 ```
 
-When building the application, you need to select the `UBX` protocol to be supported.  
-The default (previous example) being `UBX v23`. We support the following protocol releases
-
-| UBX Protocol | Compilation flag |
-|--------------|------------------|
-| v23          | `ubx_proto23`    |
-| v27          | `ubx_proto27`    |
-| v31          | `ubx_proto31`    |
-
-For example, to compile with `ubx_proto31` support:
-
-```bash
-cargo build -r \
-    --no-default-features --features ubx_proto31
-```
+The application uses the latest `UBX` protocol supported. This may unlock full potential
+of modern devices, and does not cause issues with older firmwares, simply restricted applications.
 
 ## Getting started
 
