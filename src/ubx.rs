@@ -1,5 +1,5 @@
 use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
-use ublox::{cfg_val::CfgVal, CfgLayer, CfgMsgAllPortsBuilder, CfgMsgSinglePort, CfgValSetBuilder};
+use ublox::{cfg_val::CfgVal, CfgLayer, CfgValSetBuilder};
 
 #[derive(Clone)]
 pub struct Settings {

@@ -3,6 +3,8 @@ use rinex::prelude::{Constellation, Duration, TimeScale};
 
 use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
 
+use std::str::FromStr;
+
 pub struct Cli {
     /// Arguments passed by user
     matches: ArgMatches,
@@ -190,6 +192,14 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .help("Define sampling interval. Default value is 30s (standard low-rate RINEX).")
                     )
                     .arg(
+                        Arg::new("timescale")
+                            .long("timescale")
+                            .required(false)
+                            .help("Express your observations in given Timescale.
+NB: some ublox + timescale settings may wind up creating invalid RINEX.
+Default value is GPST."
+                    ))
+                    .arg(
                         Arg::new("crx")
                             .long("crx")
                             .action(ArgAction::SetTrue)
@@ -261,7 +271,13 @@ We use V3 by default, because very few tools support V4, so we remain compatible
     }
 
     fn timescale(&self) -> TimeScale {
-        TimeScale::GPST
+        if let Some(ts) = self.matches.get_one::<String>("timescale") {
+            let ts = TimeScale::from_str(ts.trim())
+                .unwrap_or_else(|e| panic!("Invalid timescale: {}", e));
+            ts
+        } else {
+            TimeScale::GPST
+        }
     }
 
     fn sampling_period(&self) -> Duration {
@@ -312,6 +328,8 @@ We use V3 by default, because very few tools support V4, so we remain compatible
 
     pub fn rinex_settings(&self) -> RinexSettings {
         RinexSettings {
+            obs_rinex: true,
+            nav_rinex: false,
             short_filename: !self.matches.get_flag("long"),
             gzip: self.matches.get_flag("gzip"),
             crinex: self.matches.get_flag("crx"),

@@ -18,17 +18,14 @@ extern crate ublox;
 
 use std::str::FromStr;
 
-use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
+use rinex::prelude::{Duration, Epoch, Observable, TimeScale, SV};
 
 use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
 
 use tokio::sync::mpsc;
 
-use ublox::{
-    cfg_val::CfgVal, CfgLayer, CfgValSetBuilder, GpsFix, NavStatusFlags, NavStatusFlags2,
-    NavTimeUtcFlags, PacketRef, RecStatFlags,
-};
+use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
 mod cli;
 mod collecter;

@@ -7,8 +7,11 @@ use hifitime::{
 
 use rinex::production::{FFU, PPU};
 
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub major: u8,
+    pub obs_rinex: bool,
+    pub nav_rinex: bool,
     pub gzip: bool,
     pub crinex: bool,
     pub name: String,
@@ -110,6 +113,8 @@ mod test {
             gzip: false,
             crinex: false,
             prefix: None,
+            obs_rinex: true,
+            nav_rinex: true,
             short_filename: true,
             name: "UBX".to_string(),
             country: "FRA".to_string(),
@@ -136,6 +141,8 @@ mod test {
             gzip: false,
             crinex: false,
             prefix: None,
+            obs_rinex: true,
+            nav_rinex: true,
             short_filename: false,
             name: "UBX".to_string(),
             country: "FRA".to_string(),

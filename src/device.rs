@@ -1,7 +1,7 @@
 use ublox::{
     AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonGnss, MonVer, NavClock, NavEoe, NavPvt,
-    NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
+    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
+    OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
     UbxPacketMeta, UbxPacketRequest,
 };
 
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use crate::utils::from_timescale;
 
-use log::{debug, error, info};
+use log::{debug, error};
 
 use crate::{collecter::Message, UbloxSettings};
 
