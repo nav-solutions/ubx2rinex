@@ -18,17 +18,18 @@ extern crate ublox;
 
 use std::str::FromStr;
 
-use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
-
 use env_logger::{Builder, Target};
+
 use log::{debug, error, info, trace, warn};
 
-use tokio::sync::mpsc;
-
-use ublox::{
-    cfg_val::CfgVal, CfgLayer, CfgValSetBuilder, GpsFix, NavStatusFlags, NavStatusFlags2,
-    NavTimeUtcFlags, PacketRef, RecStatFlags,
+use tokio::{
+    signal,
+    sync::{mpsc, watch},
 };
+
+use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
+
+use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
 mod cli;
 mod collecter;
@@ -36,26 +37,20 @@ mod device;
 mod ubx;
 mod utils;
 
-use cli::Cli;
-use collecter::{rawxm::Rawxm, Collecter, Message};
-use device::Device;
-
-use utils::to_constellation;
-
-pub use ubx::Settings as UbloxSettings;
-
-async fn wait_sigterm(tx: mpsc::Sender<Message>) {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to wait for SHUTDOWN signal");
-    let _ = tx.send(Message::Shutdown);
-    panic!("terminated!");
-}
+use crate::{
+    cli::Cli,
+    collecter::{
+        ephemeris::EphemerisBuilder, navigation::Collecter as NavCollecter,
+        observation::Collecter as ObsCollecter, rawxm::Rawxm, Message,
+    },
+    device::Device,
+    ubx::Settings as UbloxSettings,
+    utils::to_constellation,
+};
 
 #[tokio::main]
 pub async fn main() {
     // pretty_env_logger::init();
-
     let mut builder = Builder::from_default_env();
 
     builder
@@ -84,6 +79,9 @@ pub async fn main() {
 
     let mut ubx_settings = cli.ublox_settings();
 
+    let timescale = ubx_settings.timescale;
+
+    // TODO
     let (c1c, l1c, d1c) = if settings.major == 2 {
         (
             Observable::from_str("C1").unwrap(),
@@ -102,27 +100,80 @@ pub async fn main() {
     ubx_settings.observables.push(l1c);
     ubx_settings.observables.push(d1c);
 
-    let (tx, rx) = mpsc::channel(32);
-    let sigterm_tx = tx.clone();
+    // Time
+    let mut t_utc = Epoch::now()
+        .unwrap_or_else(|e| panic!("Failed to determine system time: {}", e))
+        .to_time_scale(TimeScale::UTC);
 
-    let mut collecter = Collecter::new(settings, ubx_settings.clone(), rx);
+    let mut nav_utc_week = t_utc.to_time_of_week().0;
 
-    tokio::spawn(async move {
-        wait_sigterm(sigterm_tx).await;
-    });
+    let mut t_gpst = t_utc.to_time_scale(TimeScale::GPST);
 
-    tokio::spawn(async move {
-        collecter.run().await;
-    });
+    let mut nav_gpst = t_gpst;
+    let mut nav_gpst_week = t_gpst.to_time_of_week().0;
+
+    let mut t_gst = t_utc.to_time_scale(TimeScale::GST);
+
+    let mut nav_gst = t_gst;
+    let mut nav_gst_week = t_gst.to_time_of_week().0;
+
+    let mut t_bdt = t_utc.to_time_scale(TimeScale::BDT);
+
+    let mut nav_bdt = t_bdt;
+    let mut nav_bdt_week = t_bdt.to_time_of_week().0;
+
+    let mut end_of_nav_epoch = false;
+
+    // Tokio
+    let (shutdown_tx, shutdown_rx) = watch::channel(true);
+
+    // Observation RINEX
+    let (obs_tx, obs_rx) = mpsc::channel(32);
+    let mut obs_collecter = ObsCollecter::new(
+        settings.clone(),
+        ubx_settings.clone(),
+        shutdown_rx.clone(),
+        obs_rx,
+    );
+
+    // Navigation RINEX
+    let (nav_tx, nav_rx) = mpsc::channel(32);
+    let mut nav_collecter = NavCollecter::new(
+        t_utc,
+        settings.clone(),
+        ubx_settings.clone(),
+        shutdown_rx.clone(),
+        nav_rx,
+    );
 
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
-    device.configure(&ubx_settings, &mut buffer, tx.clone());
+    device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
 
-    let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
+    if ubx_settings.rawxm {
+        tokio::spawn(async move {
+            debug!("{} - Observation mode deployed", t_utc);
+            obs_collecter.run().await;
+        });
+    }
 
-    info!("{} - program deployed", now);
+    if ubx_settings.ephemeris {
+        tokio::spawn(async move {
+            debug!("{} - Navigation  mode deployed", t_utc);
+            nav_collecter.run().await;
+        });
+    }
+
+    tokio::spawn(async move {
+        signal::ctrl_c()
+            .await
+            .unwrap_or_else(|e| panic!("Tokio signal handling error: {}", e));
+
+        shutdown_tx
+            .send(true)
+            .unwrap_or_else(|e| panic!("Tokio: signaling error: {}", e));
+    });
 
     loop {
         let _ = device.consume_all_cb(&mut buffer, |packet| {
@@ -132,17 +183,14 @@ pub async fn main() {
                     let _dyn_model = pkt.dyn_model();
                 },
                 PacketRef::RxmRawx(pkt) => {
-                    let tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
-                    let week = pkt.week();
-
-                    let t =
-                        Epoch::from_time_of_week(week as u32, tow_nanos, ubx_settings.timescale);
+                    let gpst_tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
+                    t_gpst = Epoch::from_time_of_week(pkt.week() as u32, gpst_tow_nanos, timescale);
 
                     let stat = pkt.rec_stat();
 
                     if stat.intersects(RecStatFlags::CLK_RESET) {
-                        error!("{} - clock reset!", t);
-                        warn!("{} - declaring phase cycle slip!", t);
+                        error!("{} - clock reset!", t_gpst);
+                        warn!("{} - declaring phase cycle slip!", t_gpst);
                     }
 
                     for meas in pkt.measurements() {
@@ -170,26 +218,26 @@ pub async fn main() {
                         let prn = meas.sv_id();
                         let sv = SV::new(constell, prn);
 
+                        let t = if settings.timescale == TimeScale::GPST {
+                            t_gpst
+                        } else {
+                            t_gpst.to_time_scale(settings.timescale)
+                        };
+
                         let rawxm = Rawxm::new(t, sv, pr, cp, dop, cno);
 
-                        match tx.try_send(Message::Measurement(rawxm)) {
+                        match obs_tx.try_send(Message::Measurement(rawxm)) {
                             Ok(_) => {
                                 debug!("{}", rawxm);
                             },
                             Err(e) => {
-                                error!("{}({}) missed measurement: {}", t, sv, e);
+                                error!("{}({}) missed measurement: {}", t_gpst, sv, e);
                             },
                         }
                     }
                 },
-                PacketRef::MonHw(_pkt) => {
-                    //let jamming = pkt.jam_ind(); //TODO
-                    //antenna problem:
-                    // pkt.a_status();
-                    //
-                },
+                PacketRef::MonHw(pkt) => {},
                 PacketRef::NavSat(pkt) => {
-                    debug!("nav-sat: {:?}", pkt);
                     for sv in pkt.svs() {
                         let constellation = to_constellation(sv.gnss_id());
 
@@ -232,34 +280,70 @@ pub async fn main() {
                     }
                 },
                 PacketRef::NavStatus(pkt) => {
+                    pkt.itow();
                     //itow = pkt.itow();
-                    fix_type = pkt.fix_type();
-                    fix_flags = pkt.flags();
-                    nav_status = pkt.flags2();
                     uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
-                    trace!("uptime: {}", uptime);
+                    trace!(
+                        "Fix status: {:?} | {:?} | {:?}",
+                        pkt.fix_stat(),
+                        pkt.flags(),
+                        pkt.flags2()
+                    );
+                    trace!("Uptime: {}", uptime);
                 },
                 PacketRef::NavEoe(pkt) => {
-                    let itow = pkt.itow();
-                    // reset Epoch
-                    // lli = None;
-                    // epoch_flag = EpochFlag::default();
-                    debug!("EOE | itow = {}", itow);
+                    let nav_gpst_itow_nanos = pkt.itow() as u64 * 1_000_000;
+
+                    nav_gpst = Epoch::from_time_of_week(
+                        nav_gpst_week,
+                        nav_gpst_itow_nanos,
+                        TimeScale::GPST,
+                    );
+
+                    end_of_nav_epoch = true;
+
+                    debug!("{} - End of Epoch", nav_gpst);
+                    let _ = nav_tx.try_send(Message::EndofEpoch(nav_gpst));
                 },
                 PacketRef::NavPvt(pkt) => {
-                    debug!("NAV PVT: {:?}", pkt);
+                    let (y, m, d) = (pkt.year() as i32, pkt.month(), pkt.day());
+                    let (hh, mm, ss) = (pkt.hour(), pkt.min(), pkt.sec());
+                    if pkt.valid() > 2 {
+                        t_utc = Epoch::from_gregorian(y, m, d, hh, mm, ss, 0, TimeScale::UTC)
+                            .to_time_scale(timescale);
+
+                        info!(
+                            "{} - nav-pvt: lat={:.5E}° long={:.5E}°",
+                            t_utc,
+                            pkt.latitude(),
+                            pkt.longitude()
+                        );
+                    }
                 },
                 PacketRef::MgaGpsEph(pkt) => {
-                    // let _sv = sv!(&format!("G{}", pkt.sv_id()));
-                    //nav_record.insert(epoch, sv);
+                    debug!("{:?}", pkt);
+                    let sv = SV::new(Constellation::GPS, pkt.sv_id());
+                    let eph = EphemerisBuilder::from_gps(pkt);
+
+                    match nav_tx.try_send(Message::Ephemeris((t_gpst, sv, eph))) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            error!("missed GPS ephemeris: {}", e);
+                        },
+                    }
                 },
                 PacketRef::MgaGloEph(pkt) => {
-                    // let _sv = sv!(&format!("R{}", pkt.sv_id()));
-                    //nav_record.insert(epoch, sv);
+                    debug!("{:?}", pkt);
+                    let sv = SV::new(Constellation::GPS, pkt.sv_id());
+                    let eph = EphemerisBuilder::from_glonass(pkt);
+
+                    match nav_tx.try_send(Message::Ephemeris((t_utc, sv, eph))) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            error!("missed Glonass ephemeris: {}", e);
+                        },
+                    }
                 },
-                /*
-                 * NAVIGATION: IONOSPHERIC MODELS
-                 */
                 PacketRef::MgaGpsIono(pkt) => {
                     // let kbmodel = KbModel {
                     //     alpha: (pkt.alpha0(), pkt.alpha1(), pkt.alpha2(), pkt.alpha3()),
@@ -270,7 +354,7 @@ pub async fn main() {
                 },
                 PacketRef::NavClock(pkt) => {
                     let clock = pkt.clk_bias();
-                    match tx.try_send(Message::Clock(clock)) {
+                    match obs_tx.try_send(Message::Clock(clock)) {
                         Ok(_) => {
                             debug!("{}", clock);
                         },
@@ -279,9 +363,6 @@ pub async fn main() {
                         },
                     }
                 },
-                /*
-                 * Errors, Warnings
-                 */
                 PacketRef::InfTest(pkt) => {
                     if let Some(msg) = pkt.message() {
                         trace!("{}", msg);
@@ -307,10 +388,23 @@ pub async fn main() {
                         warn!("{}", msg);
                     }
                 },
-                pkt => {
-                    warn!("main: {:?}", pkt);
-                }, // unused
+                _ => {},
             }
         });
+
+        if end_of_nav_epoch {
+            if ubx_settings.constellations.contains(&Constellation::GPS) {
+                device.request_mga_gps_eph();
+            }
+
+            if ubx_settings
+                .constellations
+                .contains(&Constellation::Glonass)
+            {
+                device.request_mga_glonass_eph();
+            }
+
+            end_of_nav_epoch = false;
+        }
     } // loop
 }

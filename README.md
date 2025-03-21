@@ -39,31 +39,24 @@ And build it using cargo:
 cargo build -r
 ```
 
-When building the application, you need to select the `UBX` protocol to be supported.  
-The default (previous example) being `UBX v23`. We support the following protocol releases
-
-| UBX Protocol | Compilation flag |
-|--------------|------------------|
-| v23          | `ubx_proto23`    |
-| v27          | `ubx_proto27`    |
-| v31          | `ubx_proto31`    |
+The application uses the latest `UBX` protocol supported. This may unlock full potential
+of modern devices, and does not cause issues with older firmwares, simply restricted applications.
 
 ## Getting started
 
-The most basic deployment consists in connecting to your U-blox to a serial port, 
-defining the UBX Uart port on your device (assuming your USB/UART is connect to the correct interface),
-activating at least one constellation (always required), 
+To deploy, you must at least select one Constellation and one signal.  
+We propose one flag per constellation, modern UBlox supports tracking of up to 3 constellations.
+We offer one flag per signal.
+
+The default opmode is Observation RINEX collection. 
+In the following example, we will collect all L1 observations for GPS
 
 ```bash
-RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps
-./target/release/ubx2rinex -p /dev/ttyACM0 --gps
+RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps --l1
 [2025-02-23T10:48:22Z INFO  ubx2rinex] Connected to U-Blox
 [2025-02-23T10:48:22Z DEBUG ubx2rinex] Software version: EXT CORE 3.01 (111141)
 [2025-02-23T10:48:22Z DEBUG ubx2rinex] Firmware version: 00080000
 ```
-
-Not defining any collection option nor selecting a mode of operation, will deploy the default
-behavior, which is Observation RINEX collection, with default options.
 
 Not defining a baud rate value means you are using our 115_200 default value.
 
@@ -78,7 +71,7 @@ To determine your U-Blox port on linux, for example:
 dmesg | tail -n 20
 ```
 
-<img src="docs/ports-listing.png" alt="Serial Port listing" width="300" />
+<img src="docs/ports-listing.png" alt="Serial Port listing" width="500" />
 
 Follow through this tutorial to understand all the options we offer, especially:
 
@@ -86,6 +79,24 @@ Follow through this tutorial to understand all the options we offer, especially:
 - [U-Blox configuration options](#u-blox-configuration)
 - [select your constellation](#constellation)
 - [Observation RINEX collection](#obs-rinex-collection)
+
+## :warning: M8 Series usage
+
+:warning: Until further notice :warning:
+
+This application is compatible with M8 series device but does not offer
+any option (as of today) to reprogram the Constellation / Signal settings. You will have
+to use a third party tool to actually reconfigure your device. 
+
+For example, M8T factory settings are GPS (L1) and GLO (L1).
+We would deploy like this:
+
+```bash
+ubx2rinex -p /dev/ttyUSB1 --gps --glonass --l1
+```
+
+Any other constellation flags has no effect. Selecting other signals has no effect.
+Removing L1 signal would create invalid RINEX.
 
 ## Application logs
 
@@ -256,10 +267,17 @@ watching of the file being produced and each new symbol is published fairly quic
 Program interruption and release
 ================================
 
-You should halt `ubx2rinex` by sending a `SHUTDOWN` (Ctrl+C) event. The program will
-catch the signal, notify it should halt and will publish the ongoing epoch.
-Pending observations are pushed into the file buffer and the file descriptor is released.  
-In other words, `ubx2rinex` ensures all available is published even on program termination.
+`ubx2rinex` does not support Ctrl+C interruption cleanly as of today.
+
+Other customizations
+====================
+
+- Define your name as `Operator`` in RINEX terminology,
+with `--operator myself`
+- Define your name as `Observer`` in RINEX terminology,
+with `--observer myself`
+- Define your agency (publisher) with `--agency myagency`
+- Define the country code (3 letter) of your agency with `--country ABC`
 
 no-std
 ======

@@ -1,6 +1,6 @@
 [package]
 name = "ubx2rinex"
-version = "0.0.2"
+version = "0.1.0"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "U-Blox to RINEX deserializer"
@@ -10,17 +10,6 @@ keywords = ["gnss", "gps", "geo"]
 categories = ["science", "science::geo", "command-line-interface", "command-line-utilities"]
 edition = "2021"
 readme = "README.md"
-
-[features]
-
-# Select U-Blox v23 protocol
-ubx_proto23 = ["ublox/ubx_proto23"]
-
-# Select U-Blox v27 protocol
-ubx_proto27 = ["ublox/ubx_proto27"]
-
-# Select U-Blox v31 protocol
-ubx_proto31 = ["ublox/ubx_proto31"]
 
 [dependencies]
 flate2 = "1"
@@ -42,7 +31,6 @@ serialport = "4.2"
 gnss-rs = { version = "2.3.5", features = ["serde"] }
 
 # ublox = "0.4.5"
-ublox = { git = "https://github.com/ublox-rs/ublox", branch = "master", features = ["std"] }
+ublox = { git = "https://github.com/ublox-rs/ublox", branch = "master", default-features = false, features = ["std", "ubx_proto31"] }
 
-# rinex = { path = "../rinex", features = ["nav", "obs"] }
 rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }

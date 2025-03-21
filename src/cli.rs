@@ -3,6 +3,8 @@ use rinex::prelude::{Constellation, Duration, TimeScale};
 
 use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
 
+use std::str::FromStr;
+
 pub struct Cli {
     /// Arguments passed by user
     matches: ArgMatches,
@@ -36,47 +38,70 @@ impl Cli {
                             .value_name("Baudrate (u32)")
                             .help("Define serial port baud rate. Communications will not work if your U-Blox streams at a different data-rate. By default we use 115_200"),
                     )
-                    .next_help_heading("U-Blox configuration")
+                    .next_help_heading("Constellation settings: at lease one required!")
                     .arg(
                         Arg::new("gps")
                             .long("gps")
                             .action(ArgAction::SetTrue)
-                            .help("Activate GPS constellation (at least one required).")
+                            .help("Activate GPS constellation")
                             .required_unless_present_any(["galileo", "beidou", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Galileo constellation (at least one required).")
+                            .help("Activate Galileo constellation")
                             .required_unless_present_any(["gps", "beidou", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
-                            .help("Activate BDS (BeiDou) constellation (at least one required).")
+                            .help("Activate BDS (BeiDou) constellation")
                             .required_unless_present_any(["galileo", "gps", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
-                            .help("Activate QZSS constellation (at least one required).")
+                            .help("Activate QZSS constellation")
                             .required_unless_present_any(["galileo", "gps", "bds", "glonass"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Glonass constellation (at least one required).")
+                            .help("Activate Glonass constellation")
                             .required_unless_present_any(["galileo", "gps", "bds", "qzss"]),
                     )
+                    .next_help_heading("Signal selection - at least one required!")
+                    .arg(
+                        Arg::new("l1")
+                            .long("l1")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate L1 signal for all constellations")
+                            .required_unless_present_any(["l2", "l5"]),
+                    )
+                    .arg(
+                        Arg::new("l2")
+                            .long("l2")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate L2 signal for all constellations")
+                            .required_unless_present_any(["l1", "l5"]),
+                    )
+                    .arg(
+                        Arg::new("l5")
+                            .long("l5")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate L5 signal for all constellations. Requires F9 or F10 series.")
+                            .required_unless_present_any(["l1", "l2"]),
+                    )
+                    .next_help_heading("U-Blox configuration")
                     .arg(
                         Arg::new("profile")
                             .long("prof")
                             .action(ArgAction::Set)
-                            .help("Define user profile. Default is set to \"portable\". This impacts the accuracy!"),
+                            .help("Define user profile. Default is set to \"portable\""),
                     )
                     .arg(
                         Arg::new("rx-clock")
@@ -121,18 +146,6 @@ When not defined, the default value is \"UBXR\".")
                             .action(ArgAction::Set)
                             .required(false)
                             .help("Define snapshot (=collection) mode")
-                    )
-                    .arg(
-                        Arg::new("nav")
-                            .long("nav")
-                            .action(ArgAction::SetTrue)
-                            .help("Activate Navigation RINEX collection. Use this to collect NAV RINEX file(s). File type is closely tied to enabled Constellation(s)."),
-                    )
-                    .arg(
-                        Arg::new("no-obs")
-                            .long("no-obs")
-                            .action(ArgAction::SetTrue)
-                            .help("Disable Observation RINEX collection. You can use this if you intend to collect Ephemerides only for example"),
                     )
                     .arg(
                         Arg::new("v2")
@@ -181,7 +194,13 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .required(false)
                             .help("Define name of Operator, to be used in all Headers"),
                     )
-                    .next_help_heading("Observation collection (signal sampling)")
+                    .next_help_heading("Observations collection (signal sampling)")
+                    .arg(
+                        Arg::new("no-obs")
+                            .long("no-obs")
+                            .action(ArgAction::SetTrue)
+                            .help("Disable Observation RINEX collection. You can use this if you intend to collect Ephemerides only for example"),
+                    )
                     .arg(
                         Arg::new("sampling")
                             .short('s')
@@ -189,6 +208,13 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .required(false)
                             .help("Define sampling interval. Default value is 30s (standard low-rate RINEX).")
                     )
+                    .arg(
+                        Arg::new("timescale")
+                            .long("timescale")
+                            .required(false)
+                            .help("Express your observations in given Timescale.
+Default value is GPST."
+                    ))
                     .arg(
                         Arg::new("crx")
                             .long("crx")
@@ -200,6 +226,19 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .long("gzip")
                             .action(ArgAction::SetTrue)
                             .help("Activate Gzip compression."))
+                    .next_help_heading("Navigation messages collection")
+                            .arg(
+                                Arg::new("nav")
+                                    .long("nav")
+                                    .required(false)
+                                    .action(ArgAction::SetTrue)
+                                    .help("Activate Navigation messages collection, which is not enabled by default.")
+                            )
+                            .arg(
+                                Arg::new("gzip")
+                                    .long("gzip")
+                                    .action(ArgAction::SetTrue)
+                                    .help("Activate Gzip compression."))
                     .get_matches()
             },
         }
@@ -260,8 +299,26 @@ We use V3 by default, because very few tools support V4, so we remain compatible
         constellations
     }
 
+    fn l1(&self) -> bool {
+        self.matches.get_flag("l1")
+    }
+
+    fn l2(&self) -> bool {
+        self.matches.get_flag("l2")
+    }
+
+    fn l5(&self) -> bool {
+        self.matches.get_flag("l5")
+    }
+
     fn timescale(&self) -> TimeScale {
-        TimeScale::GPST
+        if let Some(ts) = self.matches.get_one::<String>("timescale") {
+            let ts = TimeScale::from_str(ts.trim())
+                .unwrap_or_else(|e| panic!("Invalid timescale: {}", e));
+            ts
+        } else {
+            TimeScale::GPST
+        }
     }
 
     fn sampling_period(&self) -> Duration {
@@ -294,8 +351,13 @@ We use V3 by default, because very few tools support V4, so we remain compatible
     pub fn ublox_settings(&self) -> UbloxSettings {
         let sampling_period = self.sampling_period();
         UbloxSettings {
+            l1: self.l1(),
+            l2: self.l2(),
+            l5: self.l5(),
             observables: Default::default(),
             sampling_period,
+            rawxm: !self.matches.get_flag("no-obs"),
+            ephemeris: self.matches.get_flag("nav"),
             timescale: self.timescale(),
             constellations: self.constellations(),
             rx_clock: self.matches.get_flag("rx-clock"),
@@ -315,6 +377,7 @@ We use V3 by default, because very few tools support V4, so we remain compatible
             short_filename: !self.matches.get_flag("long"),
             gzip: self.matches.get_flag("gzip"),
             crinex: self.matches.get_flag("crx"),
+            timescale: self.timescale(),
             major: if self.matches.get_flag("v4") {
                 4
             } else if self.matches.get_flag("v2") {
