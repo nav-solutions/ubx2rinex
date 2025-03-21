@@ -1,182 +1,143 @@
 use std::{
     io::{BufWriter, Write},
-    str::FromStr,
+    collections::BTreeMap,
 };
 
-use tokio::sync::mpsc::Receiver;
-
-use log::error;
+use log::{error, info};
 
 use rinex::{
-    prelude::{
-        obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Header, Observable,
-        Duration, Epoch,
-    },
+    record::Record,
+    prelude::{Epoch, Header, RinexType, Version},
+    navigation::{NavKey, NavFrameType, NavMessageType, NavFrame},
 };
 
-use crate::UbloxSettings;
+use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
 
-mod fd;
+use crate::{
+    collecter::{fd::FileDescriptor, settings::Settings, Message},
+    UbloxSettings,
+};
 
-pub mod rawxm;
-pub mod settings;
-
-use fd::FileDescriptor;
-use rawxm::Rawxm;
-use settings::Settings;
-
-#[derive(Debug)]
-pub enum Message {
-}
-
-pub struct NavCollecter {
-    t: Option<Epoch>,
-    t0: Option<Epoch>,
-    buf: Observations,
-    rx: Receiver<Message>,
+pub struct Collecter {
+    /// T0: initial deploy time, updated on each file release.
+    t0: Epoch,
+    rx: Rx<Message>,
+    shutdown: WatchRx<bool>,
     settings: Settings,
+    header: Header,
+    record: Record,
+    ubx_settings: UbloxSettings,
     fd: Option<BufWriter<FileDescriptor>>,
 }
 
-impl NavCollecter {
-    /// Builds new [NavCollecter]
-    pub fn new(settings: Settings, ublox: UbloxSettings, rx: Receiver<Message>) -> Self {
+impl Collecter {
+    /// Builds new [Collecter]
+    pub fn new(
+        t0: Epoch,
+        settings: Settings,
+        ublox: UbloxSettings,
+        shutdown: WatchRx<bool>,
+        rx: Rx<Message>,
+    ) -> Self {
+        let version = Version::new(settings.major, 0);
+
+        let mut header = Header::basic_nav()
+            .with_version(version);
+
+        if let Some(operator) = &settings.operator {
+            header.observer = Some(operator.clone());
+        }
+
+        if let Some(agency) = &settings.agency {
+            header.agency = Some(agency.to_string());
+        }
+
         Self {
+            t0,
             rx,
-            fd: None,
-            t0: None,
-            t: None,
             settings,
-            shutdown: false,
-            obs_header: None,
+            header,
+            fd: None,
+            shutdown,
             ubx_settings: ublox,
-            buf: Observations::default(),
+            record: Record::NavRecord(BTreeMap::new()),
         }
     }
 
     /// Obtain a new file descriptor
-    fn fd(&self, t: Epoch) -> FileDescriptor {
+    fn fd(&self) -> FileDescriptor {
+        let t = self.t0;
         let filename = self.settings.filename(t);
         FileDescriptor::new(self.settings.gzip, &filename)
     }
 
     pub async fn run(&mut self) {
         loop {
-            match self.rx.try_recv() {
-                Ok(msg) => match msg {
+            match self.rx.recv().await {
+                Some(msg) => match msg {
+
+                    Message::EndofEpoch(t) => {
+                        if self.fd.is_none() {
+                            self.release_header();
+                        }
+
+                        let fd = self.fd.as_mut().unwrap();
+
+                        match self.record.format(fd, &self.header) {
+                            Ok(_) => {
+                                info!("{} - released new epoch", t);
+                            },
+                            Err(e) => {
+                                error!("{} - RINEX formatting error: {}", t, e);
+                            },
+                        }
+                    },
+
                     Message::FirmwareVersion(version) => {
                         self.ubx_settings.firmware = Some(version.to_string());
+                    },
+
+                    Message::Ephemeris((t, sv, eph)) => {
+                        
+                        let key = NavKey {
+                            epoch: t,
+                            sv,
+                            msgtype: NavMessageType::LNAV,
+                            frmtype: NavFrameType::Ephemeris,
+                        };
+
+                        let frame = NavFrame::EPH(eph);
+
+                        let rec = self.record.as_mut_nav()
+                            .expect("internal error: invalid nav setup");
+
+                        rec.insert(key, frame);
                     },
 
                     Message::Shutdown => {
                         return;
                     },
+
+                    _ => {},
                 },
-                Err(_) => {
-                    tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-                },
+                None => {},
             }
-            tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
         }
     }
 
     fn release_header(&mut self) {
-        let t0 = self.t0.unwrap();
 
-        // obtain new file, release header
-        let mut fd = BufWriter::new(self.fd(t0));
+        // obtain a file descriptor
+        let mut fd = BufWriter::new(self.fd());
 
-        let header = self.build_header();
-
-        header.format(&mut fd).unwrap_or_else(|e| {
+        self.header.format(&mut fd).unwrap_or_else(|e| {
             panic!(
-                "Observation header formatting: {}. Aborting (avoiding corrupt file)",
+                "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
                 e
             )
         });
 
         let _ = fd.flush();
-
         self.fd = Some(fd);
-        self.obs_header = Some(header.obs.unwrap().clone());
-    }
-
-    fn release_epoch(&mut self) {
-        let t = self.t.unwrap();
-
-        let key = ObsKey {
-            epoch: t,
-            flag: EpochFlag::Ok, // TODO,
-        };
-
-        let mut fd = self.fd.as_mut().unwrap();
-
-        let obs_header = self
-            .obs_header
-            .as_ref()
-            .expect("internal error: missing Observation header");
-
-        match self
-            .buf
-            .format(self.settings.major == 2, &key, obs_header, &mut fd)
-        {
-            Ok(_) => {
-                let _ = fd.flush();
-                self.buf.clock = None;
-                self.buf.signals.clear();
-            },
-            Err(e) => {
-                error!("{} formatting issue: {}", t, e);
-            },
-        }
-    }
-
-    fn build_header(&self) -> Header {
-        let mut header = Header::default();
-        let mut obs_header = ObsHeader::default();
-
-        header.version.major = self.settings.major;
-
-        if self.settings.crinex {
-            let mut crinex = CRINEX::default();
-
-            if self.settings.major == 2 {
-                crinex.version.major = 2;
-            } else {
-                crinex.version.major = 3;
-            }
-
-            obs_header.crinex = Some(crinex);
-        }
-
-        if let Some(operator) = &self.settings.operator {
-            header.observer = Some(operator.clone());
-        }
-
-        if let Some(agency) = &self.settings.agency {
-            header.agency = Some(agency.clone());
-        }
-
-        for constellation in self.ubx_settings.constellations.iter() {
-            for observable in self.ubx_settings.observables.iter() {
-                if let Some(codes) = obs_header.codes.get_mut(constellation) {
-                    codes.push(observable.clone());
-                } else {
-                    obs_header
-                        .codes
-                        .insert(*constellation, vec![observable.clone()]);
-                }
-            }
-        }
-
-        header.obs = Some(obs_header);
-        header
-    }
-
-    /// Returns collecter uptime (whole session)
-    fn uptime(&self, t: Epoch) -> Option<Duration> {
-        let t0 = self.t0?;
-        Some(t - t0)
     }
 }

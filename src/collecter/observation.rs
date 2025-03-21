@@ -6,6 +6,7 @@ use std::{
 use rinex::{
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
+        RinexType,
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
         Epoch, Header, Observable, CRINEX,
     },
@@ -14,13 +15,12 @@ use rinex::{
 use tokio::{
     sync::mpsc::Receiver as Rx,
     sync::watch::Receiver as WatchRx,
-    time::{sleep, Duration},
 };
 
 use log::error;
 
 use crate::{
-    collecter::{fd::FileDescriptor, rawxm::Rawxm, settings::Settings, Message},
+    collecter::{fd::FileDescriptor, settings::Settings, Message},
     UbloxSettings,
 };
 
@@ -67,7 +67,6 @@ impl Collecter {
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg {
-                    Message::EndofEpoch => {},
                     Message::Timestamp(t) => {},
                     Message::FirmwareVersion(version) => {
                         self.ubx_settings.firmware = Some(version.to_string());
@@ -149,6 +148,7 @@ impl Collecter {
 
                         self.t = Some(rawxm.t);
                     },
+                    _ => {},
                 },
                 None => {},
             }
@@ -208,9 +208,11 @@ impl Collecter {
 
     fn build_header(&self) -> Header {
         let mut header = Header::default();
-        let mut obs_header = ObsHeader::default();
 
+        header.rinex_type = RinexType::ObservationData;
         header.version.major = self.settings.major;
+
+        let mut obs_header = ObsHeader::default();
 
         if self.settings.crinex {
             let mut crinex = CRINEX::default();

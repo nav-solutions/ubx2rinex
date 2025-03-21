@@ -1,10 +1,12 @@
 use ublox::{
     AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
-    OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
+    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt,
+    NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
     UbxPacketMeta, UbxPacketRequest,
-    CfgValSet,
+    MgaGpsEph, MgaGloEph,
 };
+
+use rinex::prelude::Constellation;
 
 use std::io::Write;
 
@@ -35,27 +37,19 @@ impl Device {
         }
 
         self.enable_nav_eoe(buf);
-        debug!("UBX-NAV-EOE enabled");
-
         self.enable_nav_pvt(buf);
-        debug!("UBX-NAV-PVT enabled");
-
         self.enable_nav_sat(buf);
-        debug!("UBX-NAV-SAT enabled");
-
         self.enable_obs_rinex(buf);
 
-        let measure_rate_ms = (settings.sampling_period.total_nanoseconds() / 1_000_000) as u16;
-
         let time_ref = from_timescale(settings.timescale);
-
+        
+        let measure_rate_ms = (settings.sampling_period.total_nanoseconds() / 1_000_000) as u16;
         self.apply_cfg_rate(buf, measure_rate_ms, settings.solutions_ratio, time_ref);
-    
+
         settings.to_ram_volatile_cfg(&mut vec);
 
         self.write_all(&vec)
             .unwrap_or_else(|e| panic!("Failed to apply RAM config: {}", e));
-
     }
 
     pub fn open(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {
@@ -154,6 +148,24 @@ impl Device {
         Ok(())
     }
 
+    pub fn request_mga_gps_eph(&mut self) {
+        match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
+            Ok(_) => {},
+            Err(e) => {
+                error!("Failed to request MGA-GPS-EPH: {}", e);
+            },
+        }
+    }
+
+    pub fn request_mga_glonass_eph(&mut self) {
+        match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
+            Ok(_) => {},
+            Err(e) => {
+                error!("Failed to request MGA-GLO-EPH: {}", e);
+            },
+        }
+    }
+
     pub fn read_version(&mut self, buffer: &mut [u8], tx: Sender<Message>) -> std::io::Result<()> {
         self.write_all(&UbxPacketRequest::request_for::<MonVer>().into_packet_bytes())
             .unwrap_or_else(|e| panic!("Failed to request firmware version: {}", e));
@@ -215,6 +227,35 @@ impl Device {
             .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
     }
 
+
+    fn enable_gps_mga_eph(&mut self, buffer: &mut [u8]) {
+        // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
+        // The other positions are for I2C, SPI, etc. Consult your device manual.
+        self.write_all(
+            &CfgMsgAllPortsBuilder::set_rate_for::<MgaGpsEph>([1, 1, 1, 1, 1, 1]).into_packet_bytes(),
+        )
+        .unwrap_or_else(|e| panic!("MGA-GPS-EPH error: {}", e));
+
+        // self.wait_for_ack::<CfgMsgAllPorts>(buffer)
+        //    .unwrap_or_else(|e| panic!("MGA-GPS-EPH error: {}", e));
+
+        debug!("MGA-GPS-EPH enabled");
+    }
+
+    fn enable_glo_mga_eph(&mut self, buffer: &mut [u8]) {
+        // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
+        // The other positions are for I2C, SPI, etc. Consult your device manual.
+        self.write_all(
+            &CfgMsgAllPortsBuilder::set_rate_for::<MgaGloEph>([1, 1, 1, 1, 1, 1]).into_packet_bytes(),
+        )
+        .unwrap_or_else(|e| panic!("MGA-GLO-EPH error: {}", e));
+
+        // self.wait_for_ack::<CfgMsgAllPorts>(buffer)
+        //     .unwrap_or_else(|e| panic!("MGA-GLO-EPH error: {}", e));
+
+        debug!("MGA-GLO-EPH enabled");
+    }
+
     fn enable_nav_eoe(&mut self, buffer: &mut [u8]) {
         // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
         // The other positions are for I2C, SPI, etc. Consult your device manual.
@@ -226,6 +267,8 @@ impl Device {
 
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-EOE error: {}", e));
+
+        debug!("UBX-NAV-EOE enabled");
     }
 
     fn enable_nav_clock(&mut self, buffer: &mut [u8]) {
@@ -250,6 +293,8 @@ impl Device {
 
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-SAT error: {}", e));
+
+        debug!("UBX-NAV-SAT enabled");
     }
 
     pub fn enable_nav_pvt(&mut self, buffer: &mut [u8]) {
@@ -263,6 +308,8 @@ impl Device {
 
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-PVT error: {}", e));
+
+        debug!("UBX-NAV-PVT enabled");
     }
 
     // pub fn read_gnss(&mut self, buffer: &mut [u8]) -> std::io::Result<()> {

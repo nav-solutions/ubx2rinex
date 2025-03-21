@@ -3,14 +3,33 @@ use ublox::{cfg_val::CfgVal, CfgLayer, CfgValSetBuilder};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
+    /// L1 activated for all constellations
+    pub l1: bool,
+    /// L2 activated for all constellations
+    pub l2: bool,
+    /// L5 activated for all constellations
+    pub l5: bool,
+    /// Timescale we align to
     pub timescale: TimeScale,
+    /// Sampling [Duration]
     pub sampling_period: Duration,
+    /// Rawxm enable
+    pub rawxm: bool,
+    /// Ephemeris enable
+    pub ephemeris: bool,
+    /// ratio
     pub solutions_ratio: u16,
+    /// Active [Constellation]s
     pub constellations: Vec<Constellation>,
+    /// Tracked [Observable]s
     pub observables: Vec<Observable>,
+    /// Serial number
     pub sn: Option<String>,
+    /// RX-clock enabled
     pub rx_clock: bool,
+    /// RX model
     pub model: Option<String>,
+    /// Firmware version
     pub firmware: Option<String>,
 }
 
@@ -22,14 +41,9 @@ impl Settings {
             || self.constellations.contains(&Constellation::QZSS)
         {
             cfg_data.push(CfgVal::SignalGpsEna(true));
-            cfg_data.push(CfgVal::SignalGpsL1caEna(true));
-            cfg_data.push(CfgVal::SignalGpsL2cEna(true));
-
             cfg_data.push(CfgVal::SignalQzssEna(true));
         } else {
             cfg_data.push(CfgVal::SignalGpsEna(false));
-            cfg_data.push(CfgVal::SignalGpsL1caEna(false));
-            cfg_data.push(CfgVal::SignalGpsL2cEna(false));
             cfg_data.push(CfgVal::SignalQzssEna(false));
         }
 
@@ -57,18 +71,39 @@ impl Settings {
             cfg_data.push(CfgVal::SignalGLoL2Ena(true));
         } else {
             cfg_data.push(CfgVal::SignalGloEna(false));
-            cfg_data.push(CfgVal::SignalGloL1Ena(false));
-            cfg_data.push(CfgVal::SignalGLoL2Ena(false));
         }
 
         if self.constellations.contains(&Constellation::BeiDou) {
             cfg_data.push(CfgVal::SignalBdsEna(true));
-            cfg_data.push(CfgVal::SignalBdsB1Ena(true));
-            cfg_data.push(CfgVal::SignalBdsB2Ena(true));
         } else {
             cfg_data.push(CfgVal::SignalBdsEna(false));
+        }
+
+        if self.l1 {
+            cfg_data.push(CfgVal::SignalGpsL1caEna(true));
+            cfg_data.push(CfgVal::SignalBdsB1Ena(true));
+            cfg_data.push(CfgVal::SignalBdsB2Ena(true));
+            cfg_data.push(CfgVal::SignalGloL1Ena(true));
+
+        } else {
+            cfg_data.push(CfgVal::SignalGpsL1caEna(false));
             cfg_data.push(CfgVal::SignalBdsB1Ena(false));
             cfg_data.push(CfgVal::SignalBdsB2Ena(false));
+            cfg_data.push(CfgVal::SignalGloL1Ena(false));
+        }
+
+        if self.l2 {
+            cfg_data.push(CfgVal::SignalGpsL2cEna(true));
+            cfg_data.push(CfgVal::SignalGLoL2Ena(true));
+        } else {
+            cfg_data.push(CfgVal::SignalGpsL2cEna(false));
+            cfg_data.push(CfgVal::SignalGLoL2Ena(false));
+        }
+
+        if self.l5 {
+            cfg_data.push(CfgVal::UndocumentedL5Enable(true));
+        } else {
+            cfg_data.push(CfgVal::UndocumentedL5Enable(false));
         }
 
         CfgValSetBuilder {

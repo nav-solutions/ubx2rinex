@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use hifitime::{
     efmt::Format,
-    prelude::{Duration, Epoch, Formatter},
+    prelude::{Duration, Epoch, Formatter, TimeScale},
 };
 
 use rinex::production::{FFU, PPU};
@@ -10,8 +10,6 @@ use rinex::production::{FFU, PPU};
 #[derive(Debug, Clone)]
 pub struct Settings {
     pub major: u8,
-    pub obs_rinex: bool,
-    pub nav_rinex: bool,
     pub gzip: bool,
     pub crinex: bool,
     pub name: String,
@@ -21,6 +19,8 @@ pub struct Settings {
     pub prefix: Option<String>,
     pub agency: Option<String>,
     pub operator: Option<String>,
+    /// Timescale to be used in Observations
+    pub timescale: TimeScale,
 }
 
 impl Settings {
@@ -101,7 +101,7 @@ impl Settings {
 #[cfg(test)]
 mod test {
     use super::Settings;
-    use hifitime::prelude::{Duration, Epoch};
+    use hifitime::prelude::{Duration, Epoch, TimeScale};
     use std::str::FromStr;
 
     #[test]
@@ -113,8 +113,7 @@ mod test {
             gzip: false,
             crinex: false,
             prefix: None,
-            obs_rinex: true,
-            nav_rinex: true,
+            timescale: TimeScale::GPST,
             short_filename: true,
             name: "UBX".to_string(),
             country: "FRA".to_string(),
@@ -141,9 +140,8 @@ mod test {
             gzip: false,
             crinex: false,
             prefix: None,
-            obs_rinex: true,
-            nav_rinex: true,
             short_filename: false,
+            timescale: TimeScale::GPST,
             name: "UBX".to_string(),
             country: "FRA".to_string(),
             period: Duration::from_days(1.0),
