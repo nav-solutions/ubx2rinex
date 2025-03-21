@@ -6,16 +6,12 @@ use std::{
 use rinex::{
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
-        RinexType,
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Epoch, Header, Observable, CRINEX,
+        Epoch, Header, Observable, RinexType, CRINEX,
     },
 };
 
-use tokio::{
-    sync::mpsc::Receiver as Rx,
-    sync::watch::Receiver as WatchRx,
-};
+use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
 
 use log::error;
 
@@ -59,7 +55,7 @@ impl Collecter {
 
     /// Obtain a new file descriptor
     fn fd(&self, t: Epoch) -> FileDescriptor {
-        let filename = self.settings.filename(t);
+        let filename = self.settings.filename(false, t);
         FileDescriptor::new(self.settings.gzip, &filename)
     }
 

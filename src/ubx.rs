@@ -84,7 +84,6 @@ impl Settings {
             cfg_data.push(CfgVal::SignalBdsB1Ena(true));
             cfg_data.push(CfgVal::SignalBdsB2Ena(true));
             cfg_data.push(CfgVal::SignalGloL1Ena(true));
-
         } else {
             cfg_data.push(CfgVal::SignalGpsL1caEna(false));
             cfg_data.push(CfgVal::SignalBdsB1Ena(false));

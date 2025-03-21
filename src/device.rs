@@ -1,12 +1,9 @@
 use ublox::{
     AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt,
-    NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
-    UbxPacketMeta, UbxPacketRequest,
-    MgaGpsEph, MgaGloEph,
+    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MgaGloEph, MgaGpsEph, MonVer, NavClock, NavEoe,
+    NavPvt, NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode,
+    UartPortId, UbxPacketMeta, UbxPacketRequest,
 };
-
-use rinex::prelude::Constellation;
 
 use std::io::Write;
 
@@ -42,7 +39,7 @@ impl Device {
         self.enable_obs_rinex(buf);
 
         let time_ref = from_timescale(settings.timescale);
-        
+
         let measure_rate_ms = (settings.sampling_period.total_nanoseconds() / 1_000_000) as u16;
         self.apply_cfg_rate(buf, measure_rate_ms, settings.solutions_ratio, time_ref);
 
@@ -225,35 +222,6 @@ impl Device {
 
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
-    }
-
-
-    fn enable_gps_mga_eph(&mut self, buffer: &mut [u8]) {
-        // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
-        // The other positions are for I2C, SPI, etc. Consult your device manual.
-        self.write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<MgaGpsEph>([1, 1, 1, 1, 1, 1]).into_packet_bytes(),
-        )
-        .unwrap_or_else(|e| panic!("MGA-GPS-EPH error: {}", e));
-
-        // self.wait_for_ack::<CfgMsgAllPorts>(buffer)
-        //    .unwrap_or_else(|e| panic!("MGA-GPS-EPH error: {}", e));
-
-        debug!("MGA-GPS-EPH enabled");
-    }
-
-    fn enable_glo_mga_eph(&mut self, buffer: &mut [u8]) {
-        // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
-        // The other positions are for I2C, SPI, etc. Consult your device manual.
-        self.write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<MgaGloEph>([1, 1, 1, 1, 1, 1]).into_packet_bytes(),
-        )
-        .unwrap_or_else(|e| panic!("MGA-GLO-EPH error: {}", e));
-
-        // self.wait_for_ack::<CfgMsgAllPorts>(buffer)
-        //     .unwrap_or_else(|e| panic!("MGA-GLO-EPH error: {}", e));
-
-        debug!("MGA-GLO-EPH enabled");
     }
 
     fn enable_nav_eoe(&mut self, buffer: &mut [u8]) {

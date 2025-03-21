@@ -1,14 +1,10 @@
-use ublox::{
-    MgaGloEphRef, 
-    MgaGpsEphRef,
-};
+use ublox::{MgaGloEphRef, MgaGpsEphRef};
 
 use rinex::navigation::Ephemeris;
 
 pub struct EphemerisBuilder {}
 
 impl EphemerisBuilder {
-
     pub fn from_gps(gps: MgaGpsEphRef) -> Ephemeris {
         Ephemeris {
             clock_bias: gps.af0(),

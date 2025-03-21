@@ -101,7 +101,7 @@ pub async fn main() {
     ubx_settings.observables.push(d1c);
 
     // Time
-        let mut t_utc = Epoch::now()
+    let mut t_utc = Epoch::now()
         .unwrap_or_else(|e| panic!("Failed to determine system time: {}", e))
         .to_time_scale(TimeScale::UTC);
 
@@ -150,7 +150,6 @@ pub async fn main() {
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
     device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
-
 
     if ubx_settings.rawxm {
         tokio::spawn(async move {

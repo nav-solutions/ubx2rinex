@@ -269,6 +269,16 @@ Program interruption and release
 
 `ubx2rinex` does not support Ctrl+C interruption cleanly as of today.
 
+Other customizations
+====================
+
+- Define your name as `Operator`` in RINEX terminology,
+with `--operator myself`
+- Define your name as `Observer`` in RINEX terminology,
+with `--observer myself`
+- Define your agency (publisher) with `--agency myagency`
+- Define the country code (3 letter) of your agency with `--country ABC`
+
 no-std
 ======
 

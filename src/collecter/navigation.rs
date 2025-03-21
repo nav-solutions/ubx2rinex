@@ -1,14 +1,14 @@
 use std::{
-    io::{BufWriter, Write},
     collections::BTreeMap,
+    io::{BufWriter, Write},
 };
 
 use log::{error, info};
 
 use rinex::{
+    navigation::{NavFrame, NavFrameType, NavKey, NavMessageType},
+    prelude::{Epoch, Header, Version},
     record::Record,
-    prelude::{Epoch, Header, RinexType, Version},
-    navigation::{NavKey, NavFrameType, NavMessageType, NavFrame},
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
@@ -41,8 +41,7 @@ impl Collecter {
     ) -> Self {
         let version = Version::new(settings.major, 0);
 
-        let mut header = Header::basic_nav()
-            .with_version(version);
+        let mut header = Header::basic_nav().with_version(version);
 
         if let Some(operator) = &settings.operator {
             header.observer = Some(operator.clone());
@@ -67,7 +66,7 @@ impl Collecter {
     /// Obtain a new file descriptor
     fn fd(&self) -> FileDescriptor {
         let t = self.t0;
-        let filename = self.settings.filename(t);
+        let filename = self.settings.filename(true, t);
         FileDescriptor::new(self.settings.gzip, &filename)
     }
 
@@ -75,7 +74,6 @@ impl Collecter {
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg {
-
                     Message::EndofEpoch(t) => {
                         if self.fd.is_none() {
                             self.release_header();
@@ -98,7 +96,6 @@ impl Collecter {
                     },
 
                     Message::Ephemeris((t, sv, eph)) => {
-                        
                         let key = NavKey {
                             epoch: t,
                             sv,
@@ -108,7 +105,9 @@ impl Collecter {
 
                         let frame = NavFrame::EPH(eph);
 
-                        let rec = self.record.as_mut_nav()
+                        let rec = self
+                            .record
+                            .as_mut_nav()
                             .expect("internal error: invalid nav setup");
 
                         rec.insert(key, frame);
@@ -126,7 +125,6 @@ impl Collecter {
     }
 
     fn release_header(&mut self) {
-
         // obtain a file descriptor
         let mut fd = BufWriter::new(self.fd());
 
