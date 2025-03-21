@@ -12,6 +12,7 @@ edition = "2021"
 readme = "README.md"
 
 [features]
+default = ["ubx_proto23"]
 
 # Select U-Blox v23 protocol
 ubx_proto23 = ["ublox/ubx_proto23"]
@@ -42,7 +43,7 @@ serialport = "4.2"
 gnss-rs = { version = "2.3.5", features = ["serde"] }
 
 # ublox = "0.4.5"
-ublox = { git = "https://github.com/ublox-rs/ublox", branch = "master", features = ["std"] }
+ublox = { git = "https://github.com/ublox-rs/ublox", branch = "master", default-features = false, features = ["std"] }
 
-# rinex = { path = "../rinex", features = ["nav", "obs"] }
-rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }
+rinex = { path = "../rinex", features = ["nav", "obs"] }
+# rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }

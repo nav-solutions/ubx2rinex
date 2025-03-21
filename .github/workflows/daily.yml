@@ -19,6 +19,10 @@ jobs:
         include:
           - name: Build (default)
             opts: -r
+          - name: Build (UBX27)
+            opts: -r --no-default-features --features ubx_proto27
+          - name: Build (UBX31)
+            opts: -r --no-default-features --features ubx_proto31
 
     steps:
     - uses: actions/checkout@v3

@@ -24,5 +24,11 @@ jobs:
     - name: Build (Default)
       run: cargo build
     
+    - name: Build (UBX27)
+      run: cargo build --no-default-features --features ubx_proto27
+    
+    - name: Build (UBX31)
+      run: cargo build --no-default-features --features ubx_proto31
+    
     - name: Coding style
       run: cargo fmt --all -- --check

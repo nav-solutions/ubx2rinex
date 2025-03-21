@@ -48,6 +48,13 @@ The default (previous example) being `UBX v23`. We support the following protoco
 | v27          | `ubx_proto27`    |
 | v31          | `ubx_proto31`    |
 
+For example, to compile with `ubx_proto31` support:
+
+```bash
+cargo build -r \
+    --no-default-features --features ubx_proto31
+```
+
 ## Getting started
 
 The most basic deployment consists in connecting to your U-blox to a serial port, 
