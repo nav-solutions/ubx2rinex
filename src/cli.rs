@@ -1,9 +1,9 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
-use rinex::prelude::{Constellation, Duration, TimeScale};
+use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
 
 use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
 
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 pub struct Cli {
     /// Arguments passed by user
@@ -38,7 +38,7 @@ impl Cli {
                             .value_name("Baudrate (u32)")
                             .help("Define serial port baud rate. Communications will not work if your U-Blox streams at a different data-rate. By default we use 115_200"),
                     )
-                    .next_help_heading("Constellation settings: at lease one required!")
+                    .next_help_heading("Constellation selection - at lease one required!")
                     .arg(
                         Arg::new("gps")
                             .long("gps")
@@ -209,6 +209,24 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .help("Define sampling interval. Default value is 30s (standard low-rate RINEX).")
                     )
                     .arg(
+                        Arg::new("no-phase")
+                            .long("no-phase")
+                            .action(ArgAction::SetTrue)
+                            .help("Do not track signal phase")
+                    )
+                    .arg(
+                        Arg::new("no-pr")
+                            .long("no-pr")
+                            .action(ArgAction::SetTrue)
+                            .help("Do not decode pseudo range")
+                    )
+                    .arg(
+                        Arg::new("no-dop")
+                            .long("no-dop")
+                            .action(ArgAction::SetTrue)
+                            .help("Do not track doppler shifts")
+                    )
+                    .arg(
                         Arg::new("timescale")
                             .long("timescale")
                             .required(false)
@@ -311,6 +329,137 @@ Default value is GPST."
         self.matches.get_flag("l5")
     }
 
+    fn no_dop(&self) -> bool {
+        self.matches.get_flag("no-dop")
+    }
+
+    fn no_pr(&self) -> bool {
+        self.matches.get_flag("no-pr")
+    }
+
+    fn no_phase(&self) -> bool {
+        self.matches.get_flag("no-phase")
+    }
+
+    fn observables(&self) -> HashMap<Constellation, Vec<Observable>> {
+        let v2 = self.matches.get_flag("v2");
+        let mut ret = HashMap::new();
+
+        for constell in self.constellations().iter() {
+            if self.l1() {
+                let mut values = match constell {
+                    Constellation::GPS
+                    | Constellation::Glonass
+                    | Constellation::Galileo
+                    | Constellation::QZSS => {
+                        if v2 {
+                            vec![
+                                Observable::from_str("C1").unwrap(),
+                                Observable::from_str("D1").unwrap(),
+                                Observable::from_str("L1").unwrap(),
+                            ]
+                        } else {
+                            vec![
+                                Observable::from_str("C1C").unwrap(),
+                                Observable::from_str("D1C").unwrap(),
+                                Observable::from_str("L1C").unwrap(),
+                            ]
+                        }
+                    },
+                    _ => {
+                        vec![]
+                    },
+                };
+
+                if self.no_dop() {
+                    values.retain(|code| !code.is_doppler_observable());
+                }
+                if self.no_phase() {
+                    values.retain(|code| !code.is_phase_range_observable());
+                }
+                if self.no_pr() {
+                    values.retain(|code| !code.is_pseudo_range_observable());
+                }
+                if !values.is_empty() {
+                    ret.insert(*constell, values);
+                }
+            }
+
+            if self.l2() {
+                let mut values = match constell {
+                    Constellation::GPS | Constellation::Glonass | Constellation::QZSS => {
+                        if v2 {
+                            vec![
+                                Observable::from_str("C2").unwrap(),
+                                Observable::from_str("D2").unwrap(),
+                                Observable::from_str("L2").unwrap(),
+                            ]
+                        } else {
+                            vec![
+                                Observable::from_str("C2C").unwrap(),
+                                Observable::from_str("D2C").unwrap(),
+                                Observable::from_str("L2C").unwrap(),
+                            ]
+                        }
+                    },
+                    _ => {
+                        vec![]
+                    },
+                };
+
+                if self.no_dop() {
+                    values.retain(|code| !code.is_doppler_observable());
+                }
+                if self.no_phase() {
+                    values.retain(|code| !code.is_phase_range_observable());
+                }
+                if self.no_pr() {
+                    values.retain(|code| !code.is_pseudo_range_observable());
+                }
+                if !values.is_empty() {
+                    ret.insert(*constell, values);
+                }
+            }
+
+            if self.l5() {
+                let mut values = match constell {
+                    Constellation::GPS | Constellation::Galileo | Constellation::QZSS => {
+                        if v2 {
+                            vec![
+                                Observable::from_str("C5").unwrap(),
+                                Observable::from_str("D5").unwrap(),
+                                Observable::from_str("L5").unwrap(),
+                            ]
+                        } else {
+                            vec![
+                                Observable::from_str("C5C").unwrap(),
+                                Observable::from_str("D5C").unwrap(),
+                                Observable::from_str("L5C").unwrap(),
+                            ]
+                        }
+                    },
+                    _ => {
+                        vec![]
+                    },
+                };
+
+                if self.no_dop() {
+                    values.retain(|code| !code.is_doppler_observable());
+                }
+                if self.no_phase() {
+                    values.retain(|code| !code.is_phase_range_observable());
+                }
+                if self.no_pr() {
+                    values.retain(|code| !code.is_pseudo_range_observable());
+                }
+                if !values.is_empty() {
+                    ret.insert(*constell, values);
+                }
+            }
+        }
+        ret
+    }
+
     fn timescale(&self) -> TimeScale {
         if let Some(ts) = self.matches.get_one::<String>("timescale") {
             let ts = TimeScale::from_str(ts.trim())
@@ -354,7 +503,6 @@ Default value is GPST."
             l1: self.l1(),
             l2: self.l2(),
             l5: self.l5(),
-            observables: Default::default(),
             sampling_period,
             rawxm: !self.matches.get_flag("no-obs"),
             ephemeris: self.matches.get_flag("nav"),
@@ -378,6 +526,7 @@ Default value is GPST."
             gzip: self.matches.get_flag("gzip"),
             crinex: self.matches.get_flag("crx"),
             timescale: self.timescale(),
+            observables: self.observables(),
             major: if self.matches.get_flag("v4") {
                 4
             } else if self.matches.get_flag("v2") {

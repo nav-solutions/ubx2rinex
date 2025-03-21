@@ -21,8 +21,6 @@ pub struct Settings {
     pub solutions_ratio: u16,
     /// Active [Constellation]s
     pub constellations: Vec<Constellation>,
-    /// Tracked [Observable]s
-    pub observables: Vec<Observable>,
     /// Serial number
     pub sn: Option<String>,
     /// RX-clock enabled

@@ -1,11 +1,14 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use hifitime::{
     efmt::Format,
     prelude::{Duration, Epoch, Formatter, TimeScale},
 };
 
-use rinex::production::{FFU, PPU};
+use rinex::{
+    prelude::{Constellation, Observable},
+    production::{FFU, PPU},
+};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
@@ -21,6 +24,7 @@ pub struct Settings {
     pub operator: Option<String>,
     /// Timescale to be used in Observations
     pub timescale: TimeScale,
+    pub observables: HashMap<Constellation, Vec<Observable>>,
 }
 
 impl Settings {
@@ -173,6 +177,7 @@ mod test {
             name: "UBX".to_string(),
             country: "FRA".to_string(),
             period: Duration::from_days(1.0),
+            observables: Default::default(),
         };
 
         let t0 = Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap();
@@ -200,6 +205,7 @@ mod test {
             name: "UBX".to_string(),
             country: "FRA".to_string(),
             period: Duration::from_days(1.0),
+            observables: Default::default(),
         };
 
         let t0 = Epoch::from_str("2020-01-01T00:00:00 UTC").unwrap();
