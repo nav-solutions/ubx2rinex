@@ -263,10 +263,7 @@ watching of the file being produced and each new symbol is published fairly quic
 Program interruption and release
 ================================
 
-You should halt `ubx2rinex` by sending a `SHUTDOWN` (Ctrl+C) event. The program will
-catch the signal, notify it should halt and will publish the ongoing epoch.
-Pending observations are pushed into the file buffer and the file descriptor is released.  
-In other words, `ubx2rinex` ensures all available is published even on program termination.
+`ubx2rinex` does not support Ctrl+C interruption cleanly as of today.
 
 no-std
 ======

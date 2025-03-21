@@ -23,7 +23,10 @@ use rinex::prelude::{Duration, Epoch, Observable, TimeScale, SV};
 use env_logger::{Builder, Target};
 use log::{debug, error, info, trace, warn};
 
-use tokio::sync::mpsc;
+use tokio::{
+    signal,
+    sync::{mpsc, watch},
+};
 
 use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
@@ -33,26 +36,17 @@ mod device;
 mod ubx;
 mod utils;
 
-use cli::Cli;
-use collecter::{rawxm::Rawxm, Collecter, Message};
-use device::Device;
-
-use utils::to_constellation;
-
-pub use ubx::Settings as UbloxSettings;
-
-async fn wait_sigterm(tx: mpsc::Sender<Message>) {
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to wait for SHUTDOWN signal");
-    let _ = tx.send(Message::Shutdown);
-    panic!("terminated!");
-}
+use crate::{
+    cli::Cli,
+    collecter::{observation::Collecter as ObsCollecter, rawxm::Rawxm, Message},
+    device::Device,
+    ubx::Settings as UbloxSettings,
+    utils::to_constellation,
+};
 
 #[tokio::main]
 pub async fn main() {
     // pretty_env_logger::init();
-
     let mut builder = Builder::from_default_env();
 
     builder
@@ -99,27 +93,34 @@ pub async fn main() {
     ubx_settings.observables.push(l1c);
     ubx_settings.observables.push(d1c);
 
-    let (tx, rx) = mpsc::channel(32);
-    let sigterm_tx = tx.clone();
+    // Tokio
+    let (shutdown_tx, shutdown_rx) = watch::channel(true);
 
-    let mut collecter = Collecter::new(settings, ubx_settings.clone(), rx);
-
-    tokio::spawn(async move {
-        wait_sigterm(sigterm_tx).await;
-    });
-
-    tokio::spawn(async move {
-        collecter.run().await;
-    });
+    // Observation RINEX
+    let (obs_tx, obs_rx) = mpsc::channel(32);
+    let mut obs_collecter = ObsCollecter::new(settings, ubx_settings.clone(), shutdown_rx, obs_rx);
 
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
-    device.configure(&ubx_settings, &mut buffer, tx.clone());
+    device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
 
     let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
 
-    info!("{} - program deployed", now);
+    tokio::spawn(async move {
+        debug!("{} - Observation RINEX deployed", now);
+        obs_collecter.run().await;
+    });
+
+    tokio::spawn(async move {
+        signal::ctrl_c()
+            .await
+            .unwrap_or_else(|e| panic!("Tokio signal handling error: {}", e));
+
+        shutdown_tx
+            .send(true)
+            .unwrap_or_else(|e| panic!("Tokio: signaling error: {}", e));
+    });
 
     loop {
         let _ = device.consume_all_cb(&mut buffer, |packet| {
@@ -169,7 +170,7 @@ pub async fn main() {
 
                         let rawxm = Rawxm::new(t, sv, pr, cp, dop, cno);
 
-                        match tx.try_send(Message::Measurement(rawxm)) {
+                        match obs_tx.try_send(Message::Measurement(rawxm)) {
                             Ok(_) => {
                                 debug!("{}", rawxm);
                             },
@@ -267,7 +268,7 @@ pub async fn main() {
                 },
                 PacketRef::NavClock(pkt) => {
                     let clock = pkt.clk_bias();
-                    match tx.try_send(Message::Clock(clock)) {
+                    match obs_tx.try_send(Message::Clock(clock)) {
                         Ok(_) => {
                             debug!("{}", clock);
                         },

@@ -12,7 +12,8 @@ use rinex::{
 };
 
 use tokio::{
-    sync::mpsc::Receiver,
+    sync::mpsc::Receiver as Rx,
+    sync::watch::Receiver as WatchRx,
     time::{sleep, Duration},
 };
 
@@ -28,8 +29,8 @@ pub struct Collecter {
     t0: Option<Epoch>,
     buf: Observations,
     header: Option<ObsHeader>,
-    rx: Receiver<Message>,
-    shutdown: bool,
+    rx: Rx<Message>,
+    shutdown: WatchRx<bool>,
     settings: Settings,
     ubx_settings: UbloxSettings,
     fd: Option<BufWriter<FileDescriptor>>,
@@ -37,14 +38,19 @@ pub struct Collecter {
 
 impl Collecter {
     /// Builds new [Collecter]
-    pub fn new(settings: Settings, ublox: UbloxSettings, rx: Receiver<Message>) -> Self {
+    pub fn new(
+        settings: Settings,
+        ublox: UbloxSettings,
+        shutdown: WatchRx<bool>,
+        rx: Rx<Message>,
+    ) -> Self {
         Self {
             rx,
+            shutdown,
+            settings,
             fd: None,
             t0: None,
             t: None,
-            settings,
-            shutdown: false,
             header: None,
             ubx_settings: ublox,
             buf: Observations::default(),
@@ -59,96 +65,106 @@ impl Collecter {
 
     pub async fn run(&mut self) {
         loop {
-            match self.rx.try_recv() {
-                Ok(msg) => match msg {
-                    Message::EndofEpoch => {},
-                    Message::Timestamp(t) => {},
-                    Message::FirmwareVersion(version) => {
-                        self.ubx_settings.firmware = Some(version.to_string());
-                    },
+            tokio::select! {
+                _ = self.shutdown.changed() => {
+                    println!("CAUGHT CHANGES");
+                    // Stop current work
+                    return ;
+                },
+                _ = sleep(Duration::from_millis(10)) => {
+                    self.tasklet().await;
+                },
+            }
+        }
+    }
 
-                    Message::Shutdown => {
+    pub async fn tasklet(&mut self) {
+        match self.rx.recv().await {
+            Some(msg) => match msg {
+                Message::EndofEpoch => {},
+                Message::Timestamp(t) => {},
+                Message::FirmwareVersion(version) => {
+                    self.ubx_settings.firmware = Some(version.to_string());
+                },
+
+                Message::Shutdown => {
+                    if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
+                        self.release_epoch();
+                    }
+                    return;
+                },
+
+                Message::Clock(clock) => {
+                    let bias = clock * 1.0E-3;
+                    let mut clock = ClockObservation::default();
+                    clock.set_offset_s(Default::default(), bias);
+                    self.buf.clock = Some(clock);
+                },
+
+                Message::Measurement(rawxm) => {
+                    if self.t0.is_none() {
+                        self.t0 = Some(rawxm.t);
+                        self.release_header();
+                    }
+
+                    if self.t.is_none() {
+                        self.t = Some(rawxm.t);
+                    }
+
+                    let t = self.t.unwrap();
+
+                    if rawxm.t > t {
                         if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
                             self.release_epoch();
                         }
-                        return;
-                    },
+                    }
 
-                    Message::Clock(clock) => {
-                        let bias = clock * 1.0E-3;
-                        let mut clock = ClockObservation::default();
-                        clock.set_offset_s(Default::default(), bias);
-                        self.buf.clock = Some(clock);
-                    },
+                    let c1c = if self.settings.major == 3 {
+                        Observable::from_str("C1C").unwrap()
+                    } else {
+                        Observable::from_str("C1").unwrap()
+                    };
 
-                    Message::Measurement(rawxm) => {
-                        if self.t0.is_none() {
-                            self.t0 = Some(rawxm.t);
-                            self.release_header();
-                        }
+                    let l1c = if self.settings.major == 3 {
+                        Observable::from_str("L1C").unwrap()
+                    } else {
+                        Observable::from_str("L1").unwrap()
+                    };
 
-                        if self.t.is_none() {
-                            self.t = Some(rawxm.t);
-                        }
+                    let d1c = if self.settings.major == 3 {
+                        Observable::from_str("D1C").unwrap()
+                    } else {
+                        Observable::from_str("D1").unwrap()
+                    };
 
-                        let t = self.t.unwrap();
+                    self.buf.signals.push(SignalObservation {
+                        sv: rawxm.sv,
+                        lli: None,
+                        snr: None,
+                        value: rawxm.cp,
+                        observable: c1c,
+                    });
 
-                        if rawxm.t > t {
-                            if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
-                                self.release_epoch();
-                            }
-                        }
+                    self.buf.signals.push(SignalObservation {
+                        sv: rawxm.sv,
+                        lli: None,
+                        snr: None,
+                        value: rawxm.pr,
+                        observable: l1c,
+                    });
 
-                        let c1c = if self.settings.major == 3 {
-                            Observable::from_str("C1C").unwrap()
-                        } else {
-                            Observable::from_str("C1").unwrap()
-                        };
+                    self.buf.signals.push(SignalObservation {
+                        sv: rawxm.sv,
+                        lli: None,
+                        snr: None,
+                        value: rawxm.dop as f64,
+                        observable: d1c,
+                    });
 
-                        let l1c = if self.settings.major == 3 {
-                            Observable::from_str("L1C").unwrap()
-                        } else {
-                            Observable::from_str("L1").unwrap()
-                        };
-
-                        let d1c = if self.settings.major == 3 {
-                            Observable::from_str("D1C").unwrap()
-                        } else {
-                            Observable::from_str("D1").unwrap()
-                        };
-
-                        self.buf.signals.push(SignalObservation {
-                            sv: rawxm.sv,
-                            lli: None,
-                            snr: None,
-                            value: rawxm.cp,
-                            observable: c1c,
-                        });
-
-                        self.buf.signals.push(SignalObservation {
-                            sv: rawxm.sv,
-                            lli: None,
-                            snr: None,
-                            value: rawxm.pr,
-                            observable: l1c,
-                        });
-
-                        self.buf.signals.push(SignalObservation {
-                            sv: rawxm.sv,
-                            lli: None,
-                            snr: None,
-                            value: rawxm.dop as f64,
-                            observable: d1c,
-                        });
-
-                        self.t = Some(rawxm.t);
-                    },
+                    self.t = Some(rawxm.t);
                 },
-                Err(_) => {
-                    sleep(Duration::from_millis(1000)).await;
-                },
-            }
-            sleep(Duration::from_millis(10)).await;
+            },
+            None => {},
         }
     }
 

@@ -78,7 +78,7 @@ impl Cli {
                         Arg::new("profile")
                             .long("prof")
                             .action(ArgAction::Set)
-                            .help("Define user profile. Default is set to \"portable\". This impacts the accuracy!"),
+                            .help("Define user profile. Default is set to \"portable\""),
                     )
                     .arg(
                         Arg::new("rx-clock")
@@ -196,7 +196,6 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .long("timescale")
                             .required(false)
                             .help("Express your observations in given Timescale.
-NB: some ublox + timescale settings may wind up creating invalid RINEX.
 Default value is GPST."
                     ))
                     .arg(
