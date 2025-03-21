@@ -81,6 +81,19 @@ Follow through this tutorial to understand all the options we offer, especially:
 - [select your constellation](#constellation)
 - [Observation RINEX collection](#obs-rinex-collection)
 
+## :warning: M8 Series usage
+
+This application is compatible with M8 series device, but does not offer
+constellation reconfiguration in this context. You can use a third party option to reconfigure
+the device.  Then define the constellation settings accordily.
+
+For example, in factory settings, the default is GPS (L1) and GLO (L1).
+So this deployment will generate valid RINEX:
+
+```bash
+ubx2rinex -p /dev/ttyUSB1 --gps --glonass
+```
+
 ## Application logs
 
 `ubx2rinex` uses the Rust logger for tracing events in real-time and not disturb the collection process.  

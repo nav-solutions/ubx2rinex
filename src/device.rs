@@ -3,6 +3,7 @@ use ublox::{
     CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
     OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode, UartPortId,
     UbxPacketMeta, UbxPacketRequest,
+    CfgValSet,
 };
 
 use std::io::Write;
@@ -25,6 +26,8 @@ pub struct Device {
 
 impl Device {
     pub fn configure(&mut self, settings: &UbloxSettings, buf: &mut [u8], tx: Sender<Message>) {
+        let mut vec = Vec::with_capacity(1024);
+
         self.read_version(buf, tx).unwrap();
 
         if settings.rx_clock {
@@ -47,6 +50,12 @@ impl Device {
         let time_ref = from_timescale(settings.timescale);
 
         self.apply_cfg_rate(buf, measure_rate_ms, settings.solutions_ratio, time_ref);
+    
+        settings.to_ram_volatile_cfg(&mut vec);
+
+        self.write_all(&vec)
+            .unwrap_or_else(|e| panic!("Failed to apply RAM config: {}", e));
+
     }
 
     pub fn open(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {

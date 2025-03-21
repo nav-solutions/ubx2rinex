@@ -103,6 +103,8 @@ pub async fn main() {
     // Open device
     let mut device = Device::open(port, baud_rate, &mut buffer);
 
+    println!("UBX CFG: {:?}", ubx_settings);
+
     device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
 
     let now = Epoch::now().unwrap_or_else(|e| panic!("Failed to determine system time: {}", e));
@@ -255,9 +257,6 @@ pub async fn main() {
                     // let _sv = sv!(&format!("R{}", pkt.sv_id()));
                     //nav_record.insert(epoch, sv);
                 },
-                /*
-                 * NAVIGATION: IONOSPHERIC MODELS
-                 */
                 PacketRef::MgaGpsIono(pkt) => {
                     // let kbmodel = KbModel {
                     //     alpha: (pkt.alpha0(), pkt.alpha1(), pkt.alpha2(), pkt.alpha3()),
@@ -277,9 +276,6 @@ pub async fn main() {
                         },
                     }
                 },
-                /*
-                 * Errors, Warnings
-                 */
                 PacketRef::InfTest(pkt) => {
                     if let Some(msg) = pkt.message() {
                         trace!("{}", msg);
@@ -305,9 +301,7 @@ pub async fn main() {
                         warn!("{}", msg);
                     }
                 },
-                pkt => {
-                    warn!("main: {:?}", pkt);
-                }, // unused
+                _ => {},
             }
         });
     } // loop

@@ -53,12 +53,3 @@ pub enum Message {
     /// Firmware version notification
     FirmwareVersion(String),
 }
-
-
-pub struct Collecter {
-    rx: Receiver<Message>,
-}
-
-impl Collecter {
-
-}

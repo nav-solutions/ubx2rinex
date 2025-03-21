@@ -1,7 +1,7 @@
 use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
 use ublox::{cfg_val::CfgVal, CfgLayer, CfgValSetBuilder};
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub timescale: TimeScale,
     pub sampling_period: Duration,
@@ -30,7 +30,6 @@ impl Settings {
             cfg_data.push(CfgVal::SignalGpsEna(false));
             cfg_data.push(CfgVal::SignalGpsL1caEna(false));
             cfg_data.push(CfgVal::SignalGpsL2cEna(false));
-
             cfg_data.push(CfgVal::SignalQzssEna(false));
         }
 
@@ -55,11 +54,11 @@ impl Settings {
         if self.constellations.contains(&Constellation::Glonass) {
             cfg_data.push(CfgVal::SignalGloEna(true));
             cfg_data.push(CfgVal::SignalGloL1Ena(true));
-            //cfg_data.push(CfgVal::SignalGloL2Ena(true));
+            cfg_data.push(CfgVal::SignalGLoL2Ena(true));
         } else {
             cfg_data.push(CfgVal::SignalGloEna(false));
             cfg_data.push(CfgVal::SignalGloL1Ena(false));
-            //cfg_data.push(CfgVal::SignalGloL2Ena(false));
+            cfg_data.push(CfgVal::SignalGLoL2Ena(false));
         }
 
         if self.constellations.contains(&Constellation::BeiDou) {
