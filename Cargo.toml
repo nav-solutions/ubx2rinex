@@ -25,12 +25,12 @@ clap = { version = "4.4.10", features = ["derive", "color"] }
 serde = "1"
 serde_json = "1"
 
-hifitime = "4"
 serialport = "4.2"
 
-gnss-rs = { version = "2.3.5", features = ["serde"] }
+hifitime = { git = "https://github.com/nyx-space/hifitime", branch = "master" }
+gnss-rs = { git = "https://github.com/rtk-rs/gnss", branch = "main", features = ["serde"] }
 
 # ublox = "0.4.5"
 ublox = { git = "https://github.com/ublox-rs/ublox", branch = "master", default-features = false, features = ["std", "ubx_proto31"] }
 
-rinex = { git = "https://github.com/rtk-rs/rinex", features = ["nav", "obs"] }
+rinex = { git = "https://github.com/rtk-rs/rinex", branch = "main", features = ["nav", "obs"] }
