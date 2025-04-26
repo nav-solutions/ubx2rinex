@@ -112,7 +112,7 @@ impl Device {
 
             // parser.consume adds the buffer to its internal buffer, and
             // returns an iterator-like object we can use to process the packets
-            let mut it = self.parser.consume(&buffer[..nbytes]);
+            let mut it = self.parser.consume_ubx(&buffer[..nbytes]);
             loop {
                 match it.next() {
                     Some(Ok(packet)) => {
