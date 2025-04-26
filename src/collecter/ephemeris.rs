@@ -8,7 +8,7 @@ impl EphemerisBuilder {
     pub fn from_gps(gps: MgaGpsEphRef) -> Ephemeris {
         Ephemeris {
             clock_bias: gps.af0(),
-            clock_drift: gps.afl(),
+            clock_drift: gps.af1(),
             clock_drift_rate: gps.af2(),
             orbits: Default::default(),
         }
