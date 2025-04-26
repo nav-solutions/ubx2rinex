@@ -81,25 +81,6 @@ pub async fn main() {
 
     let timescale = ubx_settings.timescale;
 
-    // TODO
-    let (c1c, l1c, d1c) = if settings.major == 2 {
-        (
-            Observable::from_str("C1").unwrap(),
-            Observable::from_str("L1").unwrap(),
-            Observable::from_str("D1").unwrap(),
-        )
-    } else {
-        (
-            Observable::from_str("C1C").unwrap(),
-            Observable::from_str("L1C").unwrap(),
-            Observable::from_str("D1C").unwrap(),
-        )
-    };
-
-    ubx_settings.observables.push(c1c);
-    ubx_settings.observables.push(l1c);
-    ubx_settings.observables.push(d1c);
-
     // Time
     let mut t_utc = Epoch::now()
         .unwrap_or_else(|e| panic!("Failed to determine system time: {}", e))

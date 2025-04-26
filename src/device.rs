@@ -112,7 +112,7 @@ impl Device {
 
             // parser.consume adds the buffer to its internal buffer, and
             // returns an iterator-like object we can use to process the packets
-            let mut it = self.parser.consume(&buffer[..nbytes]);
+            let mut it = self.parser.consume_ubx(&buffer[..nbytes]);
             loop {
                 match it.next() {
                     Some(Ok(packet)) => {
@@ -147,7 +147,9 @@ impl Device {
 
     pub fn request_mga_gps_eph(&mut self) {
         match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
-            Ok(_) => {},
+            Ok(_) => {
+                debug!("MGA-GPS-EPH");
+            },
             Err(e) => {
                 error!("Failed to request MGA-GPS-EPH: {}", e);
             },
@@ -156,7 +158,9 @@ impl Device {
 
     pub fn request_mga_glonass_eph(&mut self) {
         match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
-            Ok(_) => {},
+            Ok(_) => {
+                debug!("MGA-GLO-EPH");
+            },
             Err(e) => {
                 error!("Failed to request MGA-GLO-EPH: {}", e);
             },

@@ -170,15 +170,15 @@ for distribution, post processing and much more. The default RINEX format garant
 of precision on sampled signal and 14 digits on the local clock state.
 
 Observation RINEX collection is the default mode and deploys at all-times, unless you
-use the `--no-obs` flag, which will turn this collection option. 
+use the `--no-obs` flag, which will disable this mode: 
 
 ```bash
 ./target/release/ubx2rinex \
         -p /dev/ttyACM0 \
         -b 115200 \
-        --rx-clock \
         --gps \
-        --v2 \
+        --l1 \
+        --rx-clock \
         -m "M8T u-Blox"
 
 [2025-02-25T20:30:01Z DEBUG ubx2rinex::device] U-Blox Software version: EXT CORE 3.01 (111141)

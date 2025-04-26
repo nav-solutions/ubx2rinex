@@ -230,17 +230,7 @@ impl Collecter {
             header.agency = Some(agency.clone());
         }
 
-        for constellation in self.ubx_settings.constellations.iter() {
-            for observable in self.ubx_settings.observables.iter() {
-                if let Some(codes) = obs_header.codes.get_mut(constellation) {
-                    codes.push(observable.clone());
-                } else {
-                    obs_header
-                        .codes
-                        .insert(*constellation, vec![observable.clone()]);
-                }
-            }
-        }
+        obs_header.codes = self.settings.observables.clone();
 
         header.obs = Some(obs_header);
         header
