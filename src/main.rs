@@ -29,7 +29,7 @@ use tokio::{
 
 use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
 
-use ublox::{GpsFix, NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
+use ublox::{NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
 mod cli;
 mod collecter;
@@ -69,7 +69,6 @@ pub async fn main() {
     let mut buffer = [0; 8192];
     let mut uptime = Duration::default();
 
-    let mut fix_type = GpsFix::NoFix; // current fix status
     let mut fix_flags = NavStatusFlags::empty(); // current fix flag
     let mut nav_status = NavStatusFlags2::Inactive;
 
