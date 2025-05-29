@@ -11,26 +11,33 @@ categories = ["science", "science::geo", "command-line-interface", "command-line
 edition = "2021"
 readme = "README.md"
 
+[dependencies.ublox]
+git = "https://github.com/ublox-rs/ublox"
+rev = "2fa6761b2ccd4344326ad55f0dadc5965e06e957"
+features = [
+    "std",
+    "ubx_proto23"
+]
+
+[dependencies.rinex]
+git = "https://github.com/rtk-rs/rinex"
+rev = "7a35021a3af48885fe3c2a7131bd9d9df6f36a70"
+features = [
+    "nav",
+    "obs"
+]
+
 [dependencies]
+log = "0.4"
 flate2 = "1"
+serde = "1"
+serde_json = "1"
 thiserror = "2"
 itertools = "0.14"
 serialport = "4.2"
-
-log = "0.4"
+hifitime = "4.1" 
+gnss-rs = { version = "2.4", features = ["serde"] }
 env_logger = "0.11"
 pretty_env_logger = "0.5"
 tokio = { version = "1.43", features = ["full"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
-
-serde = "1"
-serde_json = "1"
-
-hifitime = { git = "https://github.com/nyx-space/hifitime", branch = "master" }
-gnss-rs = { git = "https://github.com/rtk-rs/gnss", branch = "main", features = ["serde"] }
-
-# ublox = "0.4.5"
-ublox = { git = "https://github.com/ublox-rs/ublox", branch = "master", default-features = false, features = ["std", "ubx_proto31"] }
-
-# rinex = { version = "0.17.0", features = ["nav", "obs"] }
-rinex = { git = "https://github.com/rtk-rs/rinex", branch = "main", features = ["nav", "obs"] }
