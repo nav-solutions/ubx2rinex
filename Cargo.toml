@@ -21,7 +21,7 @@ features = [
 
 [dependencies.rinex]
 git = "https://github.com/rtk-rs/rinex"
-rev = "7a35021a3af48885fe3c2a7131bd9d9df6f36a70"
+rev = "dcdabcdb8a19731900ebbb6bd1e09574b9cac30e"
 features = [
     "nav",
     "obs"
