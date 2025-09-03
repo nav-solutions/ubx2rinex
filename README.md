@@ -1,11 +1,11 @@
 UBX2RINEX
 =========
 
-[![Rust](https://github.com/rtk-rs/ubx2rinex/actions/workflows/rust.yml/badge.svg)](https://github.com/rtk-rs/ubx2rinex/actions/workflows/rust.yml)
-[![Rust](https://github.com/rtk-rs/ubx2rinex/actions/workflows/daily.yml/badge.svg)](https://github.com/rtk-rs/ubx2rinex/actions/workflows/daily.yml)
+[![Rust](https://github.com/nav-solutions/ubx2rinex/actions/workflows/rust.yml/badge.svg)](https://github.com/nav-solutions/ubx2rinex/actions/workflows/rust.yml)
+[![Rust](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml/badge.svg)](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml)
 [![crates.io](https://img.shields.io/crates/v/ubx2rinex.svg)](https://crates.io/crates/ubx2rinex)
 
-[![License](https://img.shields.io/badge/license-MPL_2.0-orange?style=for-the-badge&logo=mozilla)](https://github.com/rtk-rs/ubx2rinex/blob/main/LICENSE)
+[![License](https://img.shields.io/badge/license-MPL_2.0-orange?style=for-the-badge&logo=mozilla)](https://github.com/nav-solutions/ubx2rinex/blob/main/LICENSE)
 
 `ubx2rinex` is a small command line utility to deserialize
 a U-Blox data stream into standardized RINEX file(s).
@@ -14,7 +14,7 @@ a U-Blox data stream into standardized RINEX file(s).
 
 ## Licensing
 
-This application is part of the [RTK-rs framework](https://github.com/rtk-rs) which
+This application is part of the [RTK-rs framework](https://github.com/nav-solutions) which
 is delivered under the [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
 
 ## Install from Cargo
@@ -30,7 +30,7 @@ cargo install ubx2rinex
 Download the version you are interested in:
 
 ```bash
-git clone https://github.com/rtk-rs/ubx2rinex
+git clone https://github.com/nav-solutions/ubx2rinex
 ```
 
 And build it using cargo:
@@ -165,7 +165,7 @@ Signal Collection
 The default `ubx2rinex` collection mode is Observation RINEX collection.  
 
 Using this mode, you can use your U-Blox as a real-time signal source (sampler)
-which is then collected as [Receiver Independent EXchange](https://github.com/rtk-rs/rinex)
+which is then collected as [Receiver Independent EXchange](https://github.com/nav-solutions/rinex)
 for distribution, post processing and much more. The default RINEX format garantees 17 digits 
 of precision on sampled signal and 14 digits on the local clock state.
 
@@ -203,7 +203,7 @@ use the `--no-obs` flag, which will disable this mode:
 
 ## Observation RINEX Timescale
 
-:warning: Observation RINEX express timestamps and clock states in a specific [GNSS Timescale](https://github.com/rtk-rs/gnss),
+:warning: Observation RINEX express timestamps and clock states in a specific [GNSS Timescale](https://github.com/nav-solutions/gnss),
 not UTC. 
 
 `ubx2rinex` is smart, it will adapt the main Timescale to [your Constellation choices](#Constellation).
