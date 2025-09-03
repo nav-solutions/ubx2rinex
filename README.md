@@ -44,7 +44,27 @@ of modern devices, and does not cause issues with older firmwares, simply restri
 
 ## Getting started
 
-To deploy, you must at least select one Constellation and one signal.  
+This application requires a U-Blox streamer, we support both a real-time streamer
+in the form of a serial connection to a U-Blox module, or deserializing a batch of
+U-Blox snapshot (also referred to, as UBX files) into RINEX. 
+
+Connecting and operating a GNSS module requires more knowledge and involes more options.
+For example, the selection of a constellation and a navigation signal.
+While deserializing UBX files removes all hardware dependent requirements. 
+
+To deserialize a UBX file, you select this mode by loading at least one file with `-f,--file`.   
+We refer to this mode, as the "passive mode", in the sense the interface is read only.
+
+To operate UBX2RINEX on the fly while connected to a U-Blox, you define the input port with `-p,--port`.   
+We refer to this mode, as the "active mode", in the sense this a both a Read + Write operation,
+the GNSS module _can_ or _needs_ to be configured to achieve the task of UBX2RINEX collection (mainly: sampling management).
+
+In any case, either `-p,--port` or `-f,--file` is required, and are mutually exclusive, you cannot operate
+in both modes at the same time.
+
+## Connection to a U-Blox module
+
+To deploy in active mode, you must at least select one Constellation and one signal.  
 We propose one flag per constellation, modern UBlox supports tracking of up to 3 constellations.
 We offer one flag per signal.
 
