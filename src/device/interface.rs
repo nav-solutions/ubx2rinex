@@ -1,9 +1,9 @@
 use serialport::SerialPort;
 use std::fs::File;
-use std::io::{Read, Write};
+use std::io::Read;
 
 /// [ReadOnlyPool] is used to stack many input file descriptors
-struct ReadOnlyPool {
+pub struct ReadOnlyPool {
     /// Current pointer
     ptr: usize,
 

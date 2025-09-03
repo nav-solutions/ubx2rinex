@@ -1,4 +1,4 @@
-use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
+use rinex::prelude::{Constellation, Duration, TimeScale};
 use ublox::{cfg_val::CfgVal, CfgLayerSet, CfgValSetBuilder};
 
 #[derive(Debug, Clone)]

@@ -12,7 +12,6 @@ use interface::Interface;
 use std::fs::File;
 use std::io::{Read, Write};
 
-use serialport::SerialPort;
 use std::time::Duration;
 
 use crate::utils::from_timescale;
@@ -71,8 +70,6 @@ impl Device {
             .timeout(Duration::from_millis(250))
             .open()
             .unwrap_or_else(|e| panic!("Failed to open {} port: {}", port_str, e));
-
-        let parser = Parser::default();
 
         let mut device = Self {
             parser: Default::default(),

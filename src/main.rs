@@ -25,9 +25,9 @@ use tokio::{
     sync::{mpsc, watch},
 };
 
-use std::{fs::File, str::FromStr};
+use std::fs::File;
 
-use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
+use rinex::prelude::{Constellation, Duration, Epoch, TimeScale, SV};
 
 use ublox::{NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
 
@@ -62,8 +62,8 @@ pub async fn main() {
     // init
     let mut buffer = [0; 8192];
     let mut uptime = Duration::default();
-    let mut fix_flags = NavStatusFlags::empty(); // current fix flag
-    let mut nav_status = NavStatusFlags2::Inactive;
+    let _fix_flags = NavStatusFlags::empty(); // current fix flag
+    let _nav_status = NavStatusFlags2::Inactive;
 
     // cli
     let cli = Cli::new();
@@ -75,8 +75,6 @@ pub async fn main() {
         Device::open_serial_port(serial, baud_rate, &mut buffer)
     } else {
         // passive mode (input files)
-        let mut size = 0;
-
         let user_files = cli.filepaths();
         let total = user_files.len();
 
@@ -102,7 +100,7 @@ pub async fn main() {
     let settings = cli.rinex_settings();
 
     // U-Blox settings
-    let mut ubx_settings = cli.ublox_settings();
+    let ubx_settings = cli.ublox_settings();
 
     let timescale = ubx_settings.timescale;
 
@@ -111,22 +109,19 @@ pub async fn main() {
         .unwrap_or_else(|e| panic!("Failed to determine system time: {}", e))
         .to_time_scale(TimeScale::UTC);
 
-    let mut nav_utc_week = t_utc.to_time_of_week().0;
+    // let nav_utc_week = t_utc.to_time_of_week().0;
 
     let mut t_gpst = t_utc.to_time_scale(TimeScale::GPST);
-
     let mut nav_gpst = t_gpst;
-    let mut nav_gpst_week = t_gpst.to_time_of_week().0;
+    let nav_gpst_week = t_gpst.to_time_of_week().0;
 
-    let mut t_gst = t_utc.to_time_scale(TimeScale::GST);
+    // let t_gst = t_utc.to_time_scale(TimeScale::GST);
+    // let nav_gst = t_gst;
+    // let nav_gst_week = t_gst.to_time_of_week().0;
 
-    let mut nav_gst = t_gst;
-    let mut nav_gst_week = t_gst.to_time_of_week().0;
-
-    let mut t_bdt = t_utc.to_time_scale(TimeScale::BDT);
-
-    let mut nav_bdt = t_bdt;
-    let mut nav_bdt_week = t_bdt.to_time_of_week().0;
+    // let t_bdt = t_utc.to_time_scale(TimeScale::BDT);
+    // let nav_bdt = t_bdt;
+    // let nav_bdt_week = t_bdt.to_time_of_week().0;
 
     let mut end_of_nav_epoch = false;
 
@@ -240,7 +235,7 @@ pub async fn main() {
                         }
                     }
                 },
-                PacketRef::MonHw(pkt) => {},
+                PacketRef::MonHw(_pkt) => {},
                 PacketRef::NavSat(pkt) => {
                     for sv in pkt.svs() {
                         let constellation = to_constellation(sv.gnss_id());
@@ -271,16 +266,16 @@ pub async fn main() {
                 PacketRef::NavTimeUTC(pkt) => {
                     if pkt.valid().intersects(NavTimeUtcFlags::VALID_UTC) {
                         // leap seconds already known
-                        let e = Epoch::maybe_from_gregorian(
-                            pkt.year().into(),
-                            pkt.month(),
-                            pkt.day(),
-                            pkt.hour(),
-                            pkt.min(),
-                            pkt.sec(),
-                            pkt.nanos() as u32,
-                            TimeScale::UTC,
-                        );
+                        // let e = Epoch::maybe_from_gregorian(
+                        //     pkt.year().into(),
+                        //     pkt.month(),
+                        //     pkt.day(),
+                        //     pkt.hour(),
+                        //     pkt.min(),
+                        //     pkt.sec(),
+                        //     pkt.nanos() as u32,
+                        //     TimeScale::UTC,
+                        // );
                     }
                 },
                 PacketRef::NavStatus(pkt) => {
@@ -348,7 +343,7 @@ pub async fn main() {
                         },
                     }
                 },
-                PacketRef::MgaGpsIono(pkt) => {
+                PacketRef::MgaGpsIono(_pkt) => {
                     // let kbmodel = KbModel {
                     //     alpha: (pkt.alpha0(), pkt.alpha1(), pkt.alpha2(), pkt.alpha3()),
                     //     beta: (pkt.beta0(), pkt.beta1(), pkt.beta2(), pkt.beta3()),

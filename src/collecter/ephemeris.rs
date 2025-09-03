@@ -14,7 +14,7 @@ impl EphemerisBuilder {
         }
     }
 
-    pub fn from_glonass(glo: MgaGloEphRef) -> Ephemeris {
+    pub fn from_glonass(_: MgaGloEphRef) -> Ephemeris {
         Ephemeris {
             clock_bias: 0.0,
             clock_drift: 0.0,

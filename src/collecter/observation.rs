@@ -63,7 +63,7 @@ impl Collecter {
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg {
-                    Message::Timestamp(t) => {},
+                    Message::Timestamp(_t) => {},
                     Message::FirmwareVersion(version) => {
                         self.ubx_settings.firmware = Some(version.to_string());
                     },
