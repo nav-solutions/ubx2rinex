@@ -128,7 +128,11 @@ impl Cli {
                             .long("file")
                             .short('f')
                             .value_name("FILENAME")
+                            .action(ArgAction::Append)
                             .required_unless_present_any(&["port"])
+                            .help("Load a single file. Use as many as needed.
+Each file descriptor is consumed one after the other. You might have to load them according
+to their sampling chronology to make sure.")
                     )
                     .next_help_heading("RINEX Collection")
                     .arg(
@@ -275,9 +279,13 @@ Default value is GPST."
         self.matches.get_one::<String>("port")
     }
 
-    /// Returns file handle specification
-    pub fn filepath(&self) -> Option<&String> {
-        self.matches.get_one::<String>("file")
+    /// Input file paths
+    pub fn filepaths(&self) -> Vec<&String> {
+        if let Some(fp) = self.matches.get_many::<String>("file") {
+            fp.collect()
+        } else {
+            Vec::new()
+        }
     }
 
     /// Returns User baud rate specification

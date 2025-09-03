@@ -16,8 +16,6 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
-use std::str::FromStr;
-
 use env_logger::{Builder, Target};
 
 use log::{debug, error, info, trace, warn};
@@ -26,6 +24,8 @@ use tokio::{
     signal,
     sync::{mpsc, watch},
 };
+
+use std::{fs::File, str::FromStr};
 
 use rinex::prelude::{Constellation, Duration, Epoch, Observable, TimeScale, SV};
 
@@ -70,13 +70,32 @@ pub async fn main() {
 
     // Input interface
     let mut device = if let Some(serial) = cli.serial_port() {
+        // active mode (GNSS module)
         let baud_rate = cli.baud_rate().unwrap_or(115_200);
-
         Device::open_serial_port(serial, baud_rate, &mut buffer)
-    } else if let Some(fullpath) = cli.filepath() {
-        Device::open_file(fullpath)
     } else {
-        panic!("invalid command line: requires either serial port or input file");
+        // passive mode (input files)
+        let mut size = 0;
+
+        let user_files = cli.filepaths();
+        let total = user_files.len();
+
+        assert!(
+            total > 0,
+            "invalid command line: requires either serial port or at least, one input file"
+        );
+
+        let mut device = Device::open_file(user_files[0]);
+
+        for i in 1..total {
+            let fd = File::open(user_files[i]).unwrap_or_else(|e| {
+                panic!("failed to open {}: {}", user_files[i], e);
+            });
+
+            device.interface.stack_file_handle(fd);
+        }
+
+        device
     };
 
     // RINEX settings
