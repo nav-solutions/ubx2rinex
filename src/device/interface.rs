@@ -51,7 +51,8 @@ impl ReadOnlyPool {
 
 /// [Interface] to the U-Blox stream
 pub enum Interface {
-    /// [Interface::ReadOnly] is dedicated to read only input, mainly File inputs.
+    /// [Interface::ReadOnlyPool] is dedicated to read only file descriptors,
+    /// to deserialize a U-Blox snapshot.
     ReadOnlyPool(ReadOnlyPool),
 
     /// [Interface::Port] is used to connect to a physical port,
