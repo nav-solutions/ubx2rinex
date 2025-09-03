@@ -5,7 +5,12 @@ use ublox::{
     UartPortId, UbxPacketMeta, UbxPacketRequest,
 };
 
-use std::io::Write;
+mod interface;
+
+use interface::Interface;
+
+use std::fs::File;
+use std::io::{Read, Write};
 
 use serialport::SerialPort;
 use std::time::Duration;
@@ -19,7 +24,7 @@ use crate::{collecter::Message, UbloxSettings};
 use tokio::sync::mpsc::Sender;
 
 pub struct Device {
-    pub port: Box<dyn SerialPort>,
+    pub interface: Interface,
     pub parser: Parser<Vec<u8>>,
 }
 
@@ -49,7 +54,18 @@ impl Device {
             .unwrap_or_else(|e| panic!("Failed to apply RAM config: {}", e));
     }
 
-    pub fn open(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {
+    pub fn open_file(fullpath: &str) -> Self {
+        let handle = File::open(fullpath).unwrap_or_else(|e| {
+            panic!("Failed to open {}: {}", fullpath, e);
+        });
+
+        Self {
+            parser: Default::default(),
+            interface: Interface::from_file_handle(handle),
+        }
+    }
+
+    pub fn open_serial_port(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {
         // open port
         let port = serialport::new(port_str, baud)
             .timeout(Duration::from_millis(250))
@@ -57,11 +73,15 @@ impl Device {
             .unwrap_or_else(|e| panic!("Failed to open {} port: {}", port_str, e));
 
         let parser = Parser::default();
-        let mut dev = Self { port, parser };
+
+        let mut device = Self {
+            parser: Default::default(),
+            interface: Interface::from_serial_port(port),
+        };
 
         for portid in [UartPortId::Uart1, UartPortId::Uart2] {
             // Enable UBX protocol on selected UART port
-            dev
+            device
             .write_all(
                     &CfgPrtUartBuilder {
                         portid,
@@ -83,15 +103,18 @@ impl Device {
                     )
                 });
 
-            dev.wait_for_ack::<CfgPrtUart>(buffer).unwrap_or_else(|e| {
-                panic!("CFG-MSG-UART NACK: {}", e);
-            });
+            device
+                .wait_for_ack::<CfgPrtUart>(buffer)
+                .unwrap_or_else(|e| {
+                    panic!("CFG-MSG-UART NACK: {}", e);
+                });
         }
-        dev
+
+        device
     }
 
     pub fn write_all(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.port.write_all(data)
+        self.interface.write_all(data)
     }
 
     // pub fn read_until_timeout(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -105,7 +128,7 @@ impl Device {
         mut cb: T,
     ) -> std::io::Result<()> {
         loop {
-            let nbytes = self.read_port(buffer)?;
+            let nbytes = self.read_interface(buffer)?;
             if nbytes == 0 {
                 break;
             }
@@ -307,9 +330,10 @@ impl Device {
     //     Ok(())
     // }
 
-    /// Reads the serial port, converting timeouts into "no data received"
-    fn read_port(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
-        match self.port.read(output) {
+    /// Reads internal [Interface], converting timeouts into "No Data Received",
+    /// which is most convenient for real-time perpertual hardware application like this one.
+    fn read_interface(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        match self.interface.read(output) {
             Ok(b) => Ok(b),
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::TimedOut {

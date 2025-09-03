@@ -59,23 +59,30 @@ pub async fn main() {
         .format_module_path(false)
         .init();
 
+    // init
+    let mut buffer = [0; 8192];
+    let mut uptime = Duration::default();
+    let mut fix_flags = NavStatusFlags::empty(); // current fix flag
+    let mut nav_status = NavStatusFlags2::Inactive;
+
     // cli
     let cli = Cli::new();
+
+    // Input interface
+    let mut device = if let Some(serial) = cli.serial_port() {
+        let baud_rate = cli.baud_rate().unwrap_or(115_200);
+
+        Device::open_serial_port(serial, baud_rate, &mut buffer)
+    } else if let Some(fullpath) = cli.filepath() {
+        Device::open_file(fullpath)
+    } else {
+        panic!("invalid command line: requires either serial port or input file");
+    };
 
     // RINEX settings
     let settings = cli.rinex_settings();
 
-    // init
-    let mut buffer = [0; 8192];
-    let mut uptime = Duration::default();
-
-    let mut fix_flags = NavStatusFlags::empty(); // current fix flag
-    let mut nav_status = NavStatusFlags2::Inactive;
-
-    // UBlox settings
-    let port = cli.port();
-    let baud_rate = cli.baud_rate().unwrap_or(115_200);
-
+    // U-Blox settings
     let mut ubx_settings = cli.ublox_settings();
 
     let timescale = ubx_settings.timescale;
@@ -126,9 +133,7 @@ pub async fn main() {
         nav_rx,
     );
 
-    // Open device
-    let mut device = Device::open(port, baud_rate, &mut buffer);
-
+    // Device configuration
     device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
 
     if ubx_settings.rawxm {

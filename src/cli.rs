@@ -21,13 +21,13 @@ impl Cli {
                     .about("U-Blox stream to RINEX collecter")
                     .color(ColorChoice::Always)
                     .arg_required_else_help(true)
-                    .next_help_heading("Serial port")
+                    .next_help_heading("Serial port (Active device, GNSS module)")
                     .arg(
                         Arg::new("port")
                             .short('p')
                             .long("port")
                             .value_name("PORT")
-                            .required(true)
+                            .required_unless_present_any(&["file"])
                             .help("Define serial port. Example /dev/ttyUSB0 on Linux")
                     )
                     .arg(
@@ -44,35 +44,35 @@ impl Cli {
                             .long("gps")
                             .action(ArgAction::SetTrue)
                             .help("Activate GPS constellation")
-                            .required_unless_present_any(["galileo", "beidou", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
                             .help("Activate Galileo constellation")
-                            .required_unless_present_any(["gps", "beidou", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
                             .help("Activate BDS (BeiDou) constellation")
-                            .required_unless_present_any(["galileo", "gps", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
                             .help("Activate QZSS constellation")
-                            .required_unless_present_any(["galileo", "gps", "bds", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
                             .help("Activate Glonass constellation")
-                            .required_unless_present_any(["galileo", "gps", "bds", "qzss"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss"]),
                     )
                     .next_help_heading("Signal selection - at least one required!")
                     .arg(
@@ -80,21 +80,21 @@ impl Cli {
                             .long("l1")
                             .action(ArgAction::SetTrue)
                             .help("Activate L1 signal for all constellations")
-                            .required_unless_present_any(["l2", "l5"]),
+                            .required_unless_present_any(["file", "l2", "l5"]),
                     )
                     .arg(
                         Arg::new("l2")
                             .long("l2")
                             .action(ArgAction::SetTrue)
                             .help("Activate L2 signal for all constellations")
-                            .required_unless_present_any(["l1", "l5"]),
+                            .required_unless_present_any(["file", "l1", "l5"]),
                     )
                     .arg(
                         Arg::new("l5")
                             .long("l5")
                             .action(ArgAction::SetTrue)
                             .help("Activate L5 signal for all constellations. Requires F9 or F10 series.")
-                            .required_unless_present_any(["l1", "l2"]),
+                            .required_unless_present_any(["file", "l1", "l2"]),
                     )
                     .next_help_heading("U-Blox configuration")
                     .arg(
@@ -121,6 +121,14 @@ impl Cli {
                             .required(false)
                             .value_name("Model")
                             .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
+                    )
+                    .next_help_heading("File interface (Passive mode)")
+                    .arg(
+                        Arg::new("file")
+                            .long("file")
+                            .short('f')
+                            .value_name("FILENAME")
+                            .required_unless_present_any(&["port"])
                     )
                     .next_help_heading("RINEX Collection")
                     .arg(
@@ -263,8 +271,13 @@ Default value is GPST."
     }
 
     /// Returns User serial port specification
-    pub fn port(&self) -> &str {
-        self.matches.get_one::<String>("port").unwrap()
+    pub fn serial_port(&self) -> Option<&String> {
+        self.matches.get_one::<String>("port")
+    }
+
+    /// Returns file handle specification
+    pub fn filepath(&self) -> Option<&String> {
+        self.matches.get_one::<String>("file")
     }
 
     /// Returns User baud rate specification
