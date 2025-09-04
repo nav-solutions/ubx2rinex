@@ -3,7 +3,7 @@ use log::{debug, error};
 use ublox::{
     AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
     CfgRate, CfgRateBuilder, DataBits, InProtoMask, MgaGloEph, MgaGpsEph, MonVer, NavClock, NavEoe,
-    NavPvt, NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode,
+    NavPvt, NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, RxmSfrbx, StopBits, UartMode,
     UartPortId, UbxPacketMeta, UbxPacketRequest,
 };
 
@@ -41,6 +41,7 @@ impl Device {
         self.enable_nav_sat(buf);
 
         self.enable_obs_rinex(settings.rawxm, buf);
+        self.enable_rxm_sfrbx(settings.ephemeris, buf);
 
         let time_ref = from_timescale(settings.timescale);
 
@@ -246,6 +247,22 @@ impl Device {
         self.wait_for_ack::<CfgRate>(buffer).unwrap_or_else(|e| {
             panic!("UBX-CFG-RATE NACK: {}", e);
         });
+    }
+
+    fn enable_rxm_sfrbx(&mut self, enable: bool, buffer: &mut [u8]) {
+        let msg = if enable {
+            // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
+            // The other positions are for I2C, SPI, etc. Consult your device manual.
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmSfrbx>([1, 1, 1, 1, 1, 1])
+        } else {
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmSfrbx>([0, 0, 0, 0, 0, 0])
+        };
+
+        self.write_all(&msg.into_packet_bytes())
+            .unwrap_or_else(|e| panic!("UBX-RXM-SFRBX error: {}", e));
+
+        self.wait_for_ack::<CfgMsgAllPorts>(buffer)
+            .unwrap_or_else(|e| panic!("UBX-RXM-SFRBX error: {}", e));
     }
 
     fn enable_obs_rinex(&mut self, enable: bool, buffer: &mut [u8]) {

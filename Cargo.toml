@@ -26,4 +26,4 @@ serialport = "4.7"
 tokio = { version = "1.43", features = ["full"] }
 rinex = { version = "0.21", features = ["obs", "nav"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
-ublox = { version = "0.6", features = ["std", "ubx_proto23"] }
+ublox = { version = "0.6", features = ["std", "sfrbx-gps", "ubx_proto23"] }

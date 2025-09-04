@@ -18,10 +18,10 @@ pub struct Settings {
     /// Sampling [Duration]
     pub sampling_period: Duration,
 
-    /// Rawxm enable
+    /// Rawxm enabled
     pub rawxm: bool,
 
-    /// Ephemeris enable
+    /// Ephemeris enabled
     pub ephemeris: bool,
 
     /// ratio

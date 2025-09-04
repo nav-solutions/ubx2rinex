@@ -29,7 +29,9 @@ use std::{fs::File, io::ErrorKind};
 
 use rinex::prelude::{Constellation, Duration, Epoch, TimeScale, SV};
 
-use ublox::{NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags};
+use ublox::{
+    NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags, RxmSfrbxInterpreted,
+};
 
 mod cli;
 mod collecter;
@@ -66,6 +68,45 @@ fn consume_device(
             PacketRef::CfgNav5(pkt) => {
                 // Dynamic model
                 // let _dyn_model = pkt.dyn_model();
+            },
+            PacketRef::RxmSfrbx(sfrbx) => {
+                let gnss_id = sfrbx.gnss_id();
+
+                match to_constellation(gnss_id) {
+                    Some(constellation) => {
+                        let sv = SV::new(constellation, sfrbx.sv_id());
+
+                        match constellation {
+                            Constellation::GPS | Constellation::QZSS => {
+                                // decode
+                                if let Some(interprated) = sfrbx.interpret() {
+                                    match interprated {
+                                        RxmSfrbxInterpreted::GpsQzss(gps_qzss) => {},
+                                    }
+                                } else {
+                                    debug!(
+                                        "{} - SFRBX interpretation issue",
+                                        runtime.utc_time().round(cfg_precision)
+                                    );
+                                }
+                            },
+                            c => {
+                                trace!(
+                                    "{} - {} constellation not handled yet",
+                                    runtime.utc_time().round(cfg_precision),
+                                    c
+                                );
+                            },
+                        }
+                    },
+                    None => {
+                        debug!(
+                            "{} - constellation id error #{}",
+                            runtime.utc_time().round(cfg_precision),
+                            gnss_id
+                        );
+                    },
+                }
             },
             PacketRef::RxmRawx(pkt) => {
                 let gpst_tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
