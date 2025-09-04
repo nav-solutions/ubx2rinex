@@ -385,13 +385,15 @@ pub async fn main() {
         device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
     }
 
-    // if ubx_settings.rawxm {
-    //     tokio::spawn(async move {
-    //         info!("{} - Observation mode deployed", t_utc.round(cfg_precision));
-    //         obs_collecter.run().await;
-    //     });
-    // }
+    // spawns OBS collector
+    if ubx_settings.rawxm {
+        tokio::spawn(async move {
+            info!("{} - Observation mode deployed", t_utc.round(cfg_precision));
+            obs_collecter.run().await;
+        });
+    }
 
+    // // spanws NAV collector
     // if ubx_settings.ephemeris {
     //     tokio::spawn(async move {
     //         info!("{} - Navigation  mode deployed", t_utc.round(cfg_precision));

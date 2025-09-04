@@ -39,7 +39,8 @@ impl Device {
         self.enable_nav_eoe(buf);
         self.enable_nav_pvt(buf);
         self.enable_nav_sat(buf);
-        self.enable_obs_rinex(buf);
+
+        self.enable_obs_rinex(settings.rawxm, buf);
 
         let time_ref = from_timescale(settings.timescale);
 
@@ -247,18 +248,23 @@ impl Device {
         });
     }
 
-    fn enable_obs_rinex(&mut self, buffer: &mut [u8]) {
-        // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
-        // The other positions are for I2C, SPI, etc. Consult your device manual.
+    fn enable_obs_rinex(&mut self, enable: bool, buffer: &mut [u8]) {
+        let msg = if enable {
+            // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
+            // The other positions are for I2C, SPI, etc. Consult your device manual.
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmRawx>([1, 1, 1, 1, 1, 1])
+        } else {
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmRawx>([0, 0, 0, 0, 0, 0])
+        };
 
-        self.write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<RxmRawx>([1, 1, 1, 1, 1, 1]).into_packet_bytes(),
-        )
-        .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
+        self.write_all(&msg.into_packet_bytes())
+            .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
 
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
     }
+
+    fn disable_obs_rinex(&mut self, buffer: &mut [u8]) {}
 
     fn enable_nav_eoe(&mut self, buffer: &mut [u8]) {
         // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
