@@ -28,7 +28,6 @@ pub struct Runtime {
     // pub fix_flag: NavStatusFlags,
     // /// Current nav status
     // pub nav_status: NavStatusFlags2,
-
     /// [PendingFrame]s
     pub pending_frames: HashMap<SV, PendingFrame>,
 }

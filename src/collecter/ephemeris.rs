@@ -59,6 +59,8 @@ impl GpsQzssEphemeris {
                             OrbitItem::F64(self.frame3.omega_dot),
                         ),
                         //("t_tm".to_string(), OrbitItem::F64(self.frame2.fit_int_flag)),
+                        //("tow".to_string(), OrbitItem::F64(self.how.tow)),
+                        //("a/s".to_string(), OrbitItem::F64(self.how.anti_spoofing)),
                         //("fitInt".to_string(), OrbitItem::F64(self.frame2.fit_int_flag)),
                         //("aodo".to_string(), OrbitItem::F64(self.frame2.aodo)),
                         //("ura".to_string(), OrbitItem::F64(self.frame1.ura))
