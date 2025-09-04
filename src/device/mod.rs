@@ -122,12 +122,18 @@ impl Device {
     //     Ok(size)
     // }
 
+    /// Consume all potential UBX packets.
+    ///
+    /// ## Returns
+    /// - Ok(0) once all packets were consumed (no packet present)
+    /// - Ok(n) with n=number of packets that were consumed (not bytes)
+    /// - Err(e) on I/O error
     pub fn consume_all_cb<T: FnMut(PacketRef)>(
         &mut self,
         buffer: &mut [u8],
         mut cb: T,
     ) -> std::io::Result<usize> {
-        let mut size = 0;
+        let mut total = 0;
 
         loop {
             let nbytes = self.read_interface(buffer)?;
@@ -143,15 +149,14 @@ impl Device {
                 match it.next() {
                     Some(Ok(packet)) => {
                         cb(packet);
-
-                        size += 1;
+                        total += 1;
                     },
                     Some(Err(e)) => {
-                        error!("parsing error: {}", e);
+                        error!("UBX parsing error: {}", e);
                     },
                     None => {
-                        // We've eaten all the packets we have
-                        return Ok(size);
+                        // consumed all packets
+                        return Ok(total);
                     },
                 }
             }
