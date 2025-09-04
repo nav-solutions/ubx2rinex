@@ -1,8 +1,14 @@
-use hifitime::prelude::{Duration, Epoch};
+use hifitime::prelude::{Duration, Epoch, TimeScale};
 
 use gnss_protos::{
     GpsQzssFrame, GpsQzssFrame1, GpsQzssFrame2, GpsQzssFrame3, GpsQzssHow, GpsQzssSubframe,
 };
+
+use rinex::navigation::{Ephemeris as RINEX, OrbitItem};
+
+use std::collections::HashMap;
+
+use crate::runtime::Runtime;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct GpsQzssEphemeris {
@@ -12,9 +18,45 @@ pub struct GpsQzssEphemeris {
     pub frame3: GpsQzssFrame3,
 }
 
+impl GpsQzssEphemeris {
+    /// Converts [Ephemeris] to (Epoch=ToC, [RINEX])
+    pub fn to_rinex(&self) -> (Epoch, RINEX) {
+        let toc = Epoch::from_time_of_week(
+            self.frame1.week as u32,
+            self.frame1.toc as u64,
+            TimeScale::GPST,
+        );
+
+        (
+            toc,
+            RINEX {
+                clock_bias: self.frame1.af0,
+                clock_drift: self.frame1.af1,
+                clock_drift_rate: self.frame1.af2,
+                orbits: HashMap::from_iter(
+                    [
+                        ("week".to_string(), OrbitItem::F64(0.0)),
+                        ("tgd".to_string(), OrbitItem::F64(self.frame1.tgd)),
+                    ]
+                    .into_iter(),
+                ),
+            },
+        )
+    }
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum Ephemeris {
     GpsQzss(GpsQzssEphemeris),
+}
+
+impl Ephemeris {
+    /// Converts [Ephemeris] to (Epoch=ToC, [RINEX])
+    pub fn to_rinex(&self) -> (Epoch, RINEX) {
+        match self {
+            Self::GpsQzss(ephemeris) => ephemeris.to_rinex(),
+        }
+    }
 }
 
 #[derive(Debug, Default, Copy, Clone)]

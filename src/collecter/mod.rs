@@ -32,6 +32,6 @@ pub enum Message {
     /// Firmware version notification
     FirmwareVersion(String),
 
-    /// Ephemeris publication
+    /// New [Ephemeris] notification
     Ephemeris((Epoch, SV, Ephemeris)),
 }

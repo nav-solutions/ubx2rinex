@@ -95,7 +95,7 @@ impl Collecter {
                         self.ubx_settings.firmware = Some(version.to_string());
                     },
 
-                    Message::Ephemeris((epoch, sv, eph)) => {
+                    Message::Ephemeris((epoch, sv, ephemeris)) => {
                         let key = NavKey {
                             sv,
                             epoch,
@@ -103,7 +103,7 @@ impl Collecter {
                             frmtype: NavFrameType::Ephemeris,
                         };
 
-                        let frame = NavFrame::EPH(eph);
+                        let frame = NavFrame::EPH(ephemeris);
 
                         let rec = self
                             .record

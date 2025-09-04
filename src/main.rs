@@ -67,7 +67,7 @@ fn consume_device(
     device.consume_all_cb(buffer, |packet| {
         match packet {
             PacketRef::CfgNav5(pkt) => {
-                // Dynamic model
+                // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
             PacketRef::RxmSfrbx(sfrbx) => {
@@ -147,7 +147,11 @@ fn consume_device(
                     let constell = to_constellation(gnss_id);
 
                     if constell.is_none() {
-                        debug!("unknown constellation: #{}", gnss_id);
+                        error!(
+                            "{} - unknown constellation: #{}",
+                            runtime.utc_time().round(cfg_precision),
+                            gnss_id
+                        );
                         continue;
                     }
 
@@ -174,7 +178,9 @@ fn consume_device(
                     }
                 }
             },
-            PacketRef::MonHw(_pkt) => {},
+            PacketRef::MonHw(_pkt) => {
+                // TODO customize RINEX header
+            },
             PacketRef::NavSat(pkt) => {
                 for sv in pkt.svs() {
                     let constellation = to_constellation(sv.gnss_id());
@@ -259,39 +265,12 @@ fn consume_device(
                 }
             },
 
-            PacketRef::MgaGpsEph(pkt) => {
-                debug!("{:?}", pkt);
-                let sv = SV::new(Constellation::GPS, pkt.sv_id());
-                let eph = EphemerisBuilder::from_gps(pkt);
-
-                match nav_tx.try_send(Message::Ephemeris((runtime.gpst_time(), sv, eph))) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        error!("missed GPS ephemeris: {}", e);
-                    },
-                }
+            PacketRef::MgaGpsEph(_) | PacketRef::MgaGloEph(_) => {
+                // MGA-EPH downlink
             },
 
-            PacketRef::MgaGloEph(pkt) => {
-                debug!("{:?}", pkt);
-                let sv = SV::new(Constellation::GPS, pkt.sv_id());
-                let eph = EphemerisBuilder::from_glonass(pkt);
-
-                match nav_tx.try_send(Message::Ephemeris((runtime.utc_time(), sv, eph))) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        error!("missed Glonass ephemeris: {}", e);
-                    },
-                }
-            },
-
-            PacketRef::MgaGpsIono(_pkt) => {
-                // let kbmodel = KbModel {
-                //     alpha: (pkt.alpha0(), pkt.alpha1(), pkt.alpha2(), pkt.alpha3()),
-                //     beta: (pkt.beta0(), pkt.beta1(), pkt.beta2(), pkt.beta3()),
-                //     region: KbRegionCode::default(), // TODO,
-                // };
-                // let _iono = IonMessage::KlobucharModel(kbmodel);
+            PacketRef::MgaGpsIono(_) => {
+                // MGA-IONO downlink
             },
 
             PacketRef::NavClock(pkt) => {
@@ -305,6 +284,7 @@ fn consume_device(
                     },
                 }
             },
+
             PacketRef::InfTest(pkt) => {
                 if let Some(msg) = pkt.message() {
                     trace!("{}", msg);
@@ -487,12 +467,13 @@ pub async fn main() {
         if ubx_settings.ephemeris {
             rtm.pending_frames.retain(|sv, pending| {
                 if let Some(validated) = pending.validate() {
+                    let (epoch, rinex) = validated.to_rinex();
+
                     false // discard
                 } else {
                     true // preserve
                 }
             });
-            // for frame in runtime.pending_frames.iter().
         }
     }
 }
