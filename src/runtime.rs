@@ -1,10 +1,13 @@
 use hifitime::prelude::{Duration, Epoch, TimeScale};
-use rinex::prelude::SV;
-use ublox::{NavStatusFlags, NavStatusFlags2};
+use log::trace;
+use rinex::prelude::{Constellation, SV};
+use ublox::{NavStatusFlags, NavStatusFlags2, RxmSfrbxInterpreted};
 
-use crate::ephemeris::{GpsQzssEphemeris, PendingGpsQzssFrame};
+use crate::ephemeris::{GpsQzssEphemeris, PendingFrame, PendingGpsQzssFrame};
 
 use gnss_protos::GpsQzssFrame;
+
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct Runtime {
@@ -23,8 +26,8 @@ pub struct Runtime {
     /// Current nav status
     pub nav_status: NavStatusFlags2,
 
-    /// Possible pending ephemeris frame
-    pub pending_gps_qzss_frame: Option<PendingGpsQzssFrame>,
+    /// [PendingFrame]s
+    pub pending_frames: HashMap<SV, PendingFrame>,
 }
 
 impl Runtime {
@@ -35,7 +38,7 @@ impl Runtime {
             uptime: Default::default(),
             fix_flag: NavStatusFlags::empty(),
             nav_status: NavStatusFlags2::Inactive,
-            pending_gps_qzss_frame: None,
+            pending_frames: Default::default(),
         }
     }
 
@@ -45,20 +48,33 @@ impl Runtime {
         self.uptime = epoch - self.deploy_time;
     }
 
-    /// Latch a new GPS/QZSS SFRBX interpretation
-    pub fn latch_gps_qzss_frame(&mut self, sv: SV, frame: GpsQzssFrame) {
-        if let Some(pending_frame) = &mut self.pending_gps_qzss_frame {
-            pending_frame.update(frame);
+    /// Latch new SFRBX interpretation
+    pub fn latch_sfrbx(
+        &mut self,
+        sv: SV,
+        interpretation: RxmSfrbxInterpreted,
+        cfg_precision: Duration,
+    ) {
+        if let Some(pending) = &mut self.pending_frames.get_mut(&sv) {
         } else {
-            self.pending_gps_qzss_frame = Some(PendingGpsQzssFrame::new(sv, frame));
+            match sv.constellation {
+                Constellation::GPS | Constellation::QZSS => {
+                    // self.pending_frames.insert(sv, PendingFrame::GpsQzss(PendingGpsQzssFrame::new()));
+                },
+                c => trace!(
+                    "{} - {} constellation not supported yet",
+                    self.utc_time().round(cfg_precision),
+                    c
+                ),
+            }
         }
     }
 
-    /// Tries to gather a [GpsQzssEphemeris]
-    pub fn gather_gps_qzss_ephemeris(&self) -> Option<GpsQzssEphemeris> {
-        let pending = self.pending_gps_qzss_frame?;
-        pending.validate()
-    }
+    // /// Tries to gather a [GpsQzssEphemeris]
+    // pub fn gather_gps_qzss_ephemeris(&self) -> Option<GpsQzssEphemeris> {
+    //     let pending = self.pending_gps_qzss_frame?;
+    //     pending.validate()
+    // }
 
     /// Returns current epoch
     pub fn current_epoch(&self, timescale: TimeScale) -> Epoch {

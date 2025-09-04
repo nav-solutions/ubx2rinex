@@ -4,45 +4,59 @@ use gnss_protos::{
     GpsQzssFrame, GpsQzssFrame1, GpsQzssFrame2, GpsQzssFrame3, GpsQzssHow, GpsQzssSubframe,
 };
 
-use rinex::prelude::SV;
-
 #[derive(Debug, Default, Copy, Clone)]
 pub struct GpsQzssEphemeris {
-    pub sv: SV,
     pub how: GpsQzssHow,
     pub frame1: GpsQzssFrame1,
     pub frame2: GpsQzssFrame2,
     pub frame3: GpsQzssFrame3,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum Ephemeris {
+    GpsQzss(GpsQzssEphemeris),
+}
+
 #[derive(Debug, Default, Copy, Clone)]
 pub struct PendingGpsQzssFrame {
-    pub sv: SV,
     pub how: GpsQzssHow,
     pub frame1: Option<GpsQzssFrame1>,
     pub frame2: Option<GpsQzssFrame2>,
     pub frame3: Option<GpsQzssFrame3>,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum PendingFrame {
+    GpsQzss(PendingGpsQzssFrame),
+}
+
+impl PendingFrame {
+    pub fn validate(&self) -> Option<Ephemeris> {
+        match self {
+            Self::GpsQzss(pending) => {
+                let validated = pending.validate()?;
+                Some(Ephemeris::GpsQzss(validated))
+            },
+        }
+    }
+}
+
 impl PendingGpsQzssFrame {
-    pub fn new(sv: SV, frame: GpsQzssFrame) -> Self {
+    pub fn new(frame: GpsQzssFrame) -> Self {
         match frame.subframe {
             GpsQzssSubframe::Ephemeris1(eph1) => Self {
-                sv,
                 how: frame.how,
                 frame2: None,
                 frame3: None,
                 frame1: Some(eph1),
             },
             GpsQzssSubframe::Ephemeris2(eph2) => Self {
-                sv,
                 how: frame.how,
                 frame3: None,
                 frame1: None,
                 frame2: Some(eph2),
             },
             GpsQzssSubframe::Ephemeris3(eph3) => Self {
-                sv,
                 how: frame.how,
                 frame2: None,
                 frame1: None,
@@ -75,7 +89,6 @@ impl PendingGpsQzssFrame {
         if frame2.iode == frame3.iode {
             if frame1.iodc as u8 == frame2.iode {
                 return Some(GpsQzssEphemeris {
-                    sv: self.sv,
                     how: self.how,
                     frame1,
                     frame2,

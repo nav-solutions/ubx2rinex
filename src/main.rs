@@ -80,10 +80,8 @@ fn consume_device(
                         match constellation {
                             Constellation::GPS | Constellation::QZSS => {
                                 // decode
-                                if let Some(interprated) = sfrbx.interpret() {
-                                    match interprated {
-                                        RxmSfrbxInterpreted::GpsQzss(gps_qzss) => {},
-                                    }
+                                if let Some(interpretation) = sfrbx.interpret() {
+                                    runtime.latch_sfrbx(sv, interpretation, cfg_precision);
                                 } else {
                                     debug!(
                                         "{} - SFRBX interpretation issue",
@@ -435,7 +433,7 @@ pub async fn main() {
         });
     }
 
-    // spanws NAV collector
+    // spawns NAV collector
     if ubx_settings.ephemeris {
         tokio::spawn(async move {
             info!("{} - Navigation  mode deployed", t_utc.round(cfg_precision));
@@ -483,6 +481,18 @@ pub async fn main() {
             Err(e) => {
                 error!("{} - I/O error: {}", rtm.utc_time().round(cfg_precision), e);
             },
+        }
+
+        // handle all pending NAV-EPH messages
+        if ubx_settings.ephemeris {
+            rtm.pending_frames.retain(|sv, pending| {
+                if let Some(validated) = pending.validate() {
+                    false // discard
+                } else {
+                    true // preserve
+                }
+            });
+            // for frame in runtime.pending_frames.iter().
         }
     }
 }

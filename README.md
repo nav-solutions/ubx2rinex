@@ -317,8 +317,4 @@ with `--observer myself`
 no-std
 ======
 
-This program relies on both the `ubx` parser and the `rinex` library.  
-The first one supports `no-std`, but it is unfortunately not true for the latter.  
-We will see if we can provide some very reduced, `no-std` compatible portions of the `rinex` library
-in the future, especially the file production side. 
-This is not scheduled work as of today. Feel free to join in if you want to see this happen sooner.
+This application required `std` and there is no plan to make it `no-std` compatible in near future.
