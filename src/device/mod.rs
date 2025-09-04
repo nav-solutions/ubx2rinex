@@ -9,10 +9,11 @@ mod interface;
 
 use interface::Interface;
 
-use std::fs::File;
-use std::io::{Read, Write};
-
-use std::time::Duration;
+use std::{
+    fs::File,
+    io::{Read, Write},
+    time::Duration,
+};
 
 use crate::utils::from_timescale;
 

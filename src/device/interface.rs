@@ -61,6 +61,11 @@ pub enum Interface {
 }
 
 impl Interface {
+    /// True if this [Interface] is read-only
+    pub fn is_read_only(&self) -> bool {
+        matches!(self, Self::ReadOnlyPool(_))
+    }
+
     /// Creates a new [SerialPort] interface
     pub fn from_serial_port(port: Box<dyn SerialPort>) -> Self {
         Self::Port(port)
@@ -93,7 +98,7 @@ impl std::io::Read for Interface {
 impl std::io::Write for Interface {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         match self {
-            Self::ReadOnlyPool(_) => Ok(0),
+            Self::ReadOnlyPool(_) => Ok(buf.len()),
             Self::Port(port) => port.write(buf),
         }
     }

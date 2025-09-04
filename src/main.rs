@@ -115,21 +115,14 @@ pub async fn main() {
     let mut nav_gpst = t_gpst;
     let nav_gpst_week = t_gpst.to_time_of_week().0;
 
-    // let t_gst = t_utc.to_time_scale(TimeScale::GST);
-    // let nav_gst = t_gst;
-    // let nav_gst_week = t_gst.to_time_of_week().0;
-
-    // let t_bdt = t_utc.to_time_scale(TimeScale::BDT);
-    // let nav_bdt = t_bdt;
-    // let nav_bdt_week = t_bdt.to_time_of_week().0;
-
     let mut end_of_nav_epoch = false;
 
-    // Tokio
+    // shutdown channel
     let (shutdown_tx, shutdown_rx) = watch::channel(true);
 
     // Observation RINEX
     let (obs_tx, obs_rx) = mpsc::channel(32);
+
     let mut obs_collecter = ObsCollecter::new(
         settings.clone(),
         ubx_settings.clone(),
@@ -139,6 +132,7 @@ pub async fn main() {
 
     // Navigation RINEX
     let (nav_tx, nav_rx) = mpsc::channel(32);
+
     let mut nav_collecter = NavCollecter::new(
         t_utc,
         settings.clone(),
@@ -148,7 +142,9 @@ pub async fn main() {
     );
 
     // Device configuration
-    device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
+    if !device.interface.is_read_only() {
+        device.configure(&ubx_settings, &mut buffer, obs_tx.clone());
+    }
 
     if ubx_settings.rawxm {
         tokio::spawn(async move {
@@ -279,7 +275,6 @@ pub async fn main() {
                     }
                 },
                 PacketRef::NavStatus(pkt) => {
-                    pkt.itow();
                     //itow = pkt.itow();
                     uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
                     trace!(
@@ -288,6 +283,7 @@ pub async fn main() {
                         pkt.flags(),
                         pkt.flags2()
                     );
+
                     trace!("Uptime: {}", uptime);
                 },
                 PacketRef::NavEoe(pkt) => {
@@ -302,6 +298,7 @@ pub async fn main() {
                     end_of_nav_epoch = true;
 
                     debug!("{} - End of Epoch", nav_gpst);
+
                     let _ = nav_tx.try_send(Message::EndofEpoch(nav_gpst));
                 },
                 PacketRef::NavPvt(pkt) => {
@@ -392,15 +389,17 @@ pub async fn main() {
         });
 
         if end_of_nav_epoch {
-            if ubx_settings.constellations.contains(&Constellation::GPS) {
-                device.request_mga_gps_eph();
-            }
+            if !device.interface.is_read_only() {
+                if ubx_settings.constellations.contains(&Constellation::GPS) {
+                    device.request_mga_gps_eph();
+                }
 
-            if ubx_settings
-                .constellations
-                .contains(&Constellation::Glonass)
-            {
-                device.request_mga_glonass_eph();
+                if ubx_settings
+                    .constellations
+                    .contains(&Constellation::Glonass)
+                {
+                    device.request_mga_glonass_eph();
+                }
             }
 
             end_of_nav_epoch = false;
