@@ -50,7 +50,7 @@ use crate::{
     utils::to_constellation,
 };
 
-async fn consume_device(
+fn consume_device(
     runtime: &mut Runtime,
     obs_tx: &mut mpsc::Sender<Message>,
     nav_tx: &mut mpsc::Sender<Message>,
@@ -58,10 +58,10 @@ async fn consume_device(
     buffer: &mut [u8],
     cfg_timescale: TimeScale,
     cfg_precision: Duration,
-) {
+) -> std::io::Result<usize> {
     let mut end_of_nav_epoch = false;
 
-    match device.consume_all_cb(buffer, |packet| {
+    device.consume_all_cb(buffer, |packet| {
         match packet {
             PacketRef::CfgNav5(pkt) => {
                 // Dynamic model
@@ -292,24 +292,7 @@ async fn consume_device(
             },
             _ => {},
         } //packet
-    }) {
-        Ok(0) => {
-            info!("{} - connection terminated", runtime.utc_time().round(cfg_precision));
-            break;
-        },
-        Ok(_) => {},
-        Err(e) => {
-            error!(
-                "{} - I/O error: {}",
-                runtime.utc_time().round(cfg_precision),
-                e
-            );
-        },
-    }
-
-    if end_of_nav_epoch {
-        end_of_nav_epoch = false;
-    }
+    })
 }
 
 #[tokio::main]
@@ -431,12 +414,31 @@ pub async fn main() {
     info!("{} - application deployed", t_utc.round(cfg_precision));
 
     loop {
-        tokio::select! {
-            _ = consume_device(&mut rtm, &mut obs_tx, &mut nav_tx, &mut device, &mut buffer, ubx_settings.timescale, cfg_precision) => {},
-           _ = signal::ctrl_c() => {
-            info!("{} - UBX2RINEX now stopping", rtm.utc_time().round(cfg_precision));
-            break;
-           },
-        };
+        match consume_device(
+            &mut rtm,
+            &mut obs_tx,
+            &mut nav_tx,
+            &mut device,
+            &mut buffer,
+            ubx_settings.timescale,
+            cfg_precision,
+        ) {
+            Ok(0) => {
+                // in standard mode, this may happen,
+                // in passive mode, we have consumed all content: we should exit.
+                if device.interface.is_read_only() {
+                    info!(
+                        "{} - consumed all content",
+                        rtm.utc_time().round(cfg_precision)
+                    );
+
+                    break;
+                }
+            },
+            Ok(_) => {}, // nominal
+            Err(e) => {
+                error!("{} - I/O error: {}", rtm.utc_time().round(cfg_precision), e);
+            },
+        }
     }
 }
