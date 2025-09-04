@@ -25,13 +25,11 @@ use tokio::{
     sync::{mpsc, watch},
 };
 
-use std::{fs::File, io::ErrorKind};
+use std::fs::File;
 
 use rinex::prelude::{Constellation, Duration, Epoch, TimeScale, SV};
 
-use ublox::{
-    NavStatusFlags, NavStatusFlags2, NavTimeUtcFlags, PacketRef, RecStatFlags, RxmSfrbxInterpreted,
-};
+use ublox::{NavTimeUtcFlags, PacketRef, RecStatFlags};
 
 mod cli;
 mod collecter;
@@ -44,8 +42,8 @@ mod utils;
 use crate::{
     cli::Cli,
     collecter::{
-        ephemeris::EphemerisBuilder, navigation::Collecter as NavCollecter,
-        observation::Collecter as ObsCollecter, rawxm::Rawxm, Message,
+        navigation::Collecter as NavCollecter, observation::Collecter as ObsCollecter,
+        rawxm::Rawxm, Message,
     },
     device::Device,
     runtime::Runtime,
@@ -66,7 +64,7 @@ fn consume_device(
 
     device.consume_all_cb(buffer, |packet| {
         match packet {
-            PacketRef::CfgNav5(pkt) => {
+            PacketRef::CfgNav5(_) => {
                 // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
@@ -465,15 +463,14 @@ pub async fn main() {
 
         // handle all pending NAV-EPH messages
         if ubx_settings.ephemeris {
-            rtm.pending_frames.retain(|sv, pending| {
+            for (sv, pending) in rtm.pending_frames.iter() {
                 if let Some(validated) = pending.validate() {
                     let (epoch, rinex) = validated.to_rinex();
 
-                    false // discard
-                } else {
-                    true // preserve
+                    // redact message
+                    let _ = nav_tx.send(Message::Ephemeris((epoch, *sv, rinex)));
                 }
-            });
+            }
         }
     }
 }

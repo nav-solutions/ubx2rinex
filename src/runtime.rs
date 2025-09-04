@@ -1,11 +1,17 @@
 use hifitime::prelude::{Duration, Epoch, TimeScale};
 use log::trace;
+
+use ublox::{
+    // NavStatusFlags,
+    // NavStatusFlags2,
+    RxmSfrbxInterpreted,
+};
+
+// use gnss_protos::GpsQzssFrame;
+
 use rinex::prelude::{Constellation, SV};
-use ublox::{NavStatusFlags, NavStatusFlags2, RxmSfrbxInterpreted};
 
-use crate::ephemeris::{GpsQzssEphemeris, PendingFrame, PendingGpsQzssFrame};
-
-use gnss_protos::GpsQzssFrame;
+use crate::ephemeris::PendingFrame;
 
 use std::collections::HashMap;
 
@@ -20,12 +26,11 @@ pub struct Runtime {
     /// Uptime as [Duration]
     pub uptime: Duration,
 
-    /// Current fix flag
-    pub fix_flag: NavStatusFlags,
+    // /// Current fix flag
+    // pub fix_flag: NavStatusFlags,
 
-    /// Current nav status
-    pub nav_status: NavStatusFlags2,
-
+    // /// Current nav status
+    // pub nav_status: NavStatusFlags2,
     /// [PendingFrame]s
     pub pending_frames: HashMap<SV, PendingFrame>,
 }
@@ -36,8 +41,8 @@ impl Runtime {
             epoch,
             deploy_time: epoch,
             uptime: Default::default(),
-            fix_flag: NavStatusFlags::empty(),
-            nav_status: NavStatusFlags2::Inactive,
+            // fix_flag: NavStatusFlags::empty(),
+            // nav_status: NavStatusFlags2::Inactive,
             pending_frames: Default::default(),
         }
     }
@@ -86,10 +91,10 @@ impl Runtime {
         self.epoch.to_time_scale(timescale).to_time_of_week().0
     }
 
-    /// Returns current epoch in [TimeScale::GPST]
-    pub fn gpst_time(&self) -> Epoch {
-        self.current_epoch(TimeScale::GPST)
-    }
+    // /// Returns current epoch in [TimeScale::GPST]
+    // pub fn gpst_time(&self) -> Epoch {
+    //     self.current_epoch(TimeScale::GPST)
+    // }
 
     /// Returns current epoch in [TimeScale::UTC]
     pub fn utc_time(&self) -> Epoch {

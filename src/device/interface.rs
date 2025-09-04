@@ -1,8 +1,5 @@
 use serialport::SerialPort;
-use std::{
-    fs::File,
-    io::{Error, ErrorKind, Read},
-};
+use std::{fs::File, io::Read};
 
 use flate2::read::GzDecoder;
 

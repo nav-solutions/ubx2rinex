@@ -2,9 +2,9 @@ use log::{debug, error};
 
 use ublox::{
     AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MgaGloEph, MgaGpsEph, MonVer, NavClock, NavEoe,
-    NavPvt, NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, RxmSfrbx, StopBits, UartMode,
-    UartPortId, UbxPacketMeta, UbxPacketRequest,
+    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
+    OutProtoMask, PacketRef, Parity, Parser, RxmRawx, RxmSfrbx, StopBits, UartMode, UartPortId,
+    UbxPacketMeta, UbxPacketRequest,
 };
 
 mod interface;
@@ -13,7 +13,7 @@ use interface::Interface;
 
 use std::{
     fs::File,
-    io::{Error, ErrorKind, Read, Write},
+    io::{ErrorKind, Read, Write},
     time::Duration,
 };
 
@@ -280,8 +280,6 @@ impl Device {
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
     }
-
-    fn disable_obs_rinex(&mut self, buffer: &mut [u8]) {}
 
     fn enable_nav_eoe(&mut self, buffer: &mut [u8]) {
         // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB

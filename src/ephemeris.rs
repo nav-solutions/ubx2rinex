@@ -1,14 +1,16 @@
-use hifitime::prelude::{Duration, Epoch, TimeScale};
+use hifitime::prelude::{Epoch, TimeScale};
 
 use gnss_protos::{
     GpsQzssFrame, GpsQzssFrame1, GpsQzssFrame2, GpsQzssFrame3, GpsQzssHow, GpsQzssSubframe,
 };
 
+use ublox::RxmSfrbxInterpreted;
+
 use rinex::navigation::{Ephemeris as RINEX, OrbitItem};
 
 use std::collections::HashMap;
 
-use crate::runtime::Runtime;
+// use crate::runtime::Runtime;
 
 #[derive(Debug, Default, Copy, Clone)]
 pub struct GpsQzssEphemeris {
@@ -98,23 +100,26 @@ pub struct PendingGpsQzssFrame {
     pub frame3: Option<GpsQzssFrame3>,
 }
 
-#[derive(Debug, Copy, Clone)]
-pub enum PendingFrame {
-    GpsQzss(PendingGpsQzssFrame),
-}
-
-impl PendingFrame {
-    pub fn validate(&self) -> Option<Ephemeris> {
-        match self {
-            Self::GpsQzss(pending) => {
-                let validated = pending.validate()?;
-                Some(Ephemeris::GpsQzss(validated))
+impl PendingGpsQzssFrame {
+    pub fn update(&mut self, interpretation: RxmSfrbxInterpreted) {
+        match interpretation {
+            RxmSfrbxInterpreted::GpsQzss(frame) => {
+                self.how = frame.how;
+                match frame.subframe {
+                    GpsQzssSubframe::Ephemeris1(subframe) => {
+                        self.frame1 = Some(subframe);
+                    },
+                    GpsQzssSubframe::Ephemeris2(subframe) => {
+                        self.frame2 = Some(subframe);
+                    },
+                    GpsQzssSubframe::Ephemeris3(subframe) => {
+                        self.frame3 = Some(subframe);
+                    },
+                }
             },
         }
     }
-}
 
-impl PendingGpsQzssFrame {
     pub fn new(frame: GpsQzssFrame) -> Self {
         match frame.subframe {
             GpsQzssSubframe::Ephemeris1(eph1) => Self {
@@ -138,22 +143,6 @@ impl PendingGpsQzssFrame {
         }
     }
 
-    pub fn update(&mut self, frame: GpsQzssFrame) {
-        self.how = frame.how.clone();
-
-        match frame.subframe {
-            GpsQzssSubframe::Ephemeris1(eph1) => {
-                self.frame1 = Some(eph1);
-            },
-            GpsQzssSubframe::Ephemeris2(eph2) => {
-                self.frame2 = Some(eph2);
-            },
-            GpsQzssSubframe::Ephemeris3(eph3) => {
-                self.frame3 = Some(eph3);
-            },
-        }
-    }
-
     pub fn validate(&self) -> Option<GpsQzssEphemeris> {
         let frame1 = self.frame1?;
         let frame2 = self.frame2?;
@@ -171,5 +160,27 @@ impl PendingGpsQzssFrame {
         }
 
         None
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum PendingFrame {
+    GpsQzss(PendingGpsQzssFrame),
+}
+
+impl PendingFrame {
+    pub fn validate(&self) -> Option<Ephemeris> {
+        match self {
+            Self::GpsQzss(pending) => {
+                let validated = pending.validate()?;
+                Some(Ephemeris::GpsQzss(validated))
+            },
+        }
+    }
+
+    pub fn update(&mut self, interpretation: RxmSfrbxInterpreted) {
+        match self {
+            Self::GpsQzss(pending) => pending.update(interpretation),
+        }
     }
 }
