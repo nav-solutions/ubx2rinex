@@ -434,13 +434,13 @@ pub async fn main() {
         });
     }
 
-    // // spanws NAV collector
-    // if ubx_settings.ephemeris {
-    //     tokio::spawn(async move {
-    //         info!("{} - Navigation  mode deployed", t_utc.round(cfg_precision));
-    //         nav_collecter.run().await;
-    //     });
-    // }
+    // spanws NAV collector
+    if ubx_settings.ephemeris {
+        tokio::spawn(async move {
+            info!("{} - Navigation  mode deployed", t_utc.round(cfg_precision));
+            nav_collecter.run().await;
+        });
+    }
 
     // tokio::spawn(async move {
     //     signal::ctrl_c()
