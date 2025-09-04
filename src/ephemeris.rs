@@ -37,6 +37,37 @@ impl GpsQzssEphemeris {
                     [
                         ("week".to_string(), OrbitItem::F64(0.0)),
                         ("tgd".to_string(), OrbitItem::F64(self.frame1.tgd)),
+                        ("iodc".to_string(), OrbitItem::F64(self.frame1.iodc as f64)),
+                        ("toe".to_string(), OrbitItem::F64(self.frame2.toe as f64)),
+                        ("m0".to_string(), OrbitItem::F64(self.frame2.m0)),
+                        ("deltaN".to_string(), OrbitItem::F64(self.frame2.dn)),
+                        ("cuc".to_string(), OrbitItem::F64(self.frame2.cuc)),
+                        ("cus".to_string(), OrbitItem::F64(self.frame2.cus)),
+                        ("crs".to_string(), OrbitItem::F64(self.frame2.crs)),
+                        ("e".to_string(), OrbitItem::F64(self.frame2.e)),
+                        ("sqrta".to_string(), OrbitItem::F64(self.frame2.sqrt_a)),
+                        ("cic".to_string(), OrbitItem::F64(self.frame3.cic)),
+                        ("cis".to_string(), OrbitItem::F64(self.frame3.cis)),
+                        ("crc".to_string(), OrbitItem::F64(self.frame3.crc)),
+                        ("i0".to_string(), OrbitItem::F64(self.frame3.i0)),
+                        ("iode".to_string(), OrbitItem::F64(self.frame3.iode as f64)),
+                        ("idot".to_string(), OrbitItem::F64(self.frame3.idot)),
+                        ("omega0".to_string(), OrbitItem::F64(self.frame3.omega0)),
+                        ("omega".to_string(), OrbitItem::F64(self.frame3.omega)),
+                        (
+                            "omegaDot".to_string(),
+                            OrbitItem::F64(self.frame3.omega_dot),
+                        ),
+                        //("t_tm".to_string(), OrbitItem::F64(self.frame2.fit_int_flag)),
+                        //("fitInt".to_string(), OrbitItem::F64(self.frame2.fit_int_flag)),
+                        //("aodo".to_string(), OrbitItem::F64(self.frame2.aodo)),
+                        //("ura".to_string(), OrbitItem::F64(self.frame1.ura))
+                        //("health".to_string(), OrbitItem::HealthFlag(self.frame1.health))
+                        //("l2Codes".to_string(), OrbitItem::F64(self.frame1.l2_p_data_flag))
+                        //("reserved4".to_string(), OrbitItem::F64(self.frame1.reserved_word4))
+                        //("reserved5".to_string(), OrbitItem::F64(self.frame1.reserved_word5))
+                        //("reserved6".to_string(), OrbitItem::F64(self.frame1.reserved_word6))
+                        //("reserved7".to_string(), OrbitItem::F64(self.frame1.reserved_word7))
                     ]
                     .into_iter(),
                 ),
