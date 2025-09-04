@@ -25,7 +25,7 @@ use tokio::{
     sync::{mpsc, watch},
 };
 
-use std::fs::File;
+use std::{fs::File, io::ErrorKind};
 
 use rinex::prelude::{Constellation, Duration, Epoch, TimeScale, SV};
 
@@ -175,7 +175,7 @@ pub async fn main() {
     });
 
     loop {
-        let _ = device.consume_all_cb(&mut buffer, |packet| {
+        match device.consume_all_cb(&mut buffer, |packet| {
             match packet {
                 PacketRef::CfgNav5(pkt) => {
                     // Dynamic model
@@ -390,22 +390,18 @@ pub async fn main() {
                 },
                 _ => {},
             }
-        });
+        }) {
+            Ok(0) => {
+                info!("Connection terminated");
+                break;
+            },
+            Ok(_) => {},
+            Err(e) => {
+                error!("I/O error: {}", e);
+            },
+        }
 
         if end_of_nav_epoch {
-            if !device.interface.is_read_only() {
-                if ubx_settings.constellations.contains(&Constellation::GPS) {
-                    device.request_mga_gps_eph();
-                }
-
-                if ubx_settings
-                    .constellations
-                    .contains(&Constellation::Glonass)
-                {
-                    device.request_mga_glonass_eph();
-                }
-            }
-
             end_of_nav_epoch = false;
         }
     } // loop

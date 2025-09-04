@@ -1,3 +1,5 @@
+use log::{debug, error};
+
 use ublox::{
     AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
     CfgRate, CfgRateBuilder, DataBits, InProtoMask, MgaGloEph, MgaGpsEph, MonVer, NavClock, NavEoe,
@@ -11,15 +13,11 @@ use interface::Interface;
 
 use std::{
     fs::File,
-    io::{Read, Write},
+    io::{Error, ErrorKind, Read, Write},
     time::Duration,
 };
 
-use crate::utils::from_timescale;
-
-use log::{debug, error};
-
-use crate::{collecter::Message, UbloxSettings};
+use crate::{collecter::Message, utils::from_timescale, UbloxSettings};
 
 use tokio::sync::mpsc::Sender;
 
@@ -128,32 +126,36 @@ impl Device {
         &mut self,
         buffer: &mut [u8],
         mut cb: T,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<usize> {
+        let mut size = 0;
+
         loop {
             let nbytes = self.read_interface(buffer)?;
             if nbytes == 0 {
-                break;
+                return Ok(0);
             }
 
             // parser.consume adds the buffer to its internal buffer, and
             // returns an iterator-like object we can use to process the packets
             let mut it = self.parser.consume_ubx(&buffer[..nbytes]);
+
             loop {
                 match it.next() {
                     Some(Ok(packet)) => {
                         cb(packet);
+
+                        size += 1;
                     },
                     Some(Err(e)) => {
                         error!("parsing error: {}", e);
                     },
                     None => {
                         // We've eaten all the packets we have
-                        break;
+                        return Ok(size);
                     },
                 }
             }
         }
-        Ok(())
     }
 
     pub fn wait_for_ack<T: UbxPacketMeta>(&mut self, buffer: &mut [u8]) -> std::io::Result<()> {
@@ -170,27 +172,27 @@ impl Device {
         Ok(())
     }
 
-    pub fn request_mga_gps_eph(&mut self) {
-        match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
-            Ok(_) => {
-                debug!("MGA-GPS-EPH");
-            },
-            Err(e) => {
-                error!("Failed to request MGA-GPS-EPH: {}", e);
-            },
-        }
-    }
+    // pub fn request_mga_gps_eph(&mut self) {
+    //     match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
+    //         Ok(_) => {
+    //             debug!("MGA-GPS-EPH");
+    //         },
+    //         Err(e) => {
+    //             error!("Failed to request MGA-GPS-EPH: {}", e);
+    //         },
+    //     }
+    // }
 
-    pub fn request_mga_glonass_eph(&mut self) {
-        match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
-            Ok(_) => {
-                debug!("MGA-GLO-EPH");
-            },
-            Err(e) => {
-                error!("Failed to request MGA-GLO-EPH: {}", e);
-            },
-        }
-    }
+    // pub fn request_mga_glonass_eph(&mut self) {
+    //     match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
+    //         Ok(_) => {
+    //             debug!("MGA-GLO-EPH");
+    //         },
+    //         Err(e) => {
+    //             error!("Failed to request MGA-GLO-EPH: {}", e);
+    //         },
+    //     }
+    // }
 
     pub fn read_version(&mut self, buffer: &mut [u8], tx: Sender<Message>) -> std::io::Result<()> {
         self.write_all(&UbxPacketRequest::request_for::<MonVer>().into_packet_bytes())
@@ -338,7 +340,7 @@ impl Device {
         match self.interface.read(output) {
             Ok(b) => Ok(b),
             Err(e) => {
-                if e.kind() == std::io::ErrorKind::TimedOut {
+                if e.kind() == ErrorKind::TimedOut {
                     Ok(0)
                 } else {
                     Err(e)
