@@ -61,7 +61,11 @@ impl Device {
 
         Self {
             parser: Default::default(),
-            interface: Interface::from_file_handle(handle),
+            interface: if fullpath.ends_with(".gz") {
+                Interface::from_gzip_file_handle(handle)
+            } else {
+                Interface::from_file_handle(handle)
+            },
         }
     }
 

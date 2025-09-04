@@ -132,7 +132,7 @@ impl Cli {
                             .required_unless_present_any(&["port"])
                             .help("Load a single file. Use as many as needed.
 Each file descriptor is consumed one after the other. You might have to load them according
-to their sampling chronology to make sure.")
+to their sampling chronology to make sure. Gzip file are supported but they must be terminated with '.gz'")
                     )
                     .next_help_heading("RINEX Collection")
                     .arg(
@@ -255,7 +255,8 @@ Default value is GPST."
                         Arg::new("gzip")
                             .long("gzip")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Gzip compression."))
+                            .help("Gzip compress the RINEX output.
+You can combine this to CRINEX compression for effiency."))
                     .next_help_heading("Navigation messages collection")
                             .arg(
                                 Arg::new("nav")
@@ -264,11 +265,6 @@ Default value is GPST."
                                     .action(ArgAction::SetTrue)
                                     .help("Activate Navigation messages collection, which is not enabled by default.")
                             )
-                            .arg(
-                                Arg::new("gzip")
-                                    .long("gzip")
-                                    .action(ArgAction::SetTrue)
-                                    .help("Activate Gzip compression."))
                     .get_matches()
             },
         }

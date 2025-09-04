@@ -1,6 +1,8 @@
 use serialport::SerialPort;
 use std::{fs::File, io::Read};
 
+use flate2::read::GzDecoder;
+
 /// [ReadOnlyPool] is used to stack many input file descriptors
 pub struct ReadOnlyPool {
     /// Current pointer
@@ -71,9 +73,14 @@ impl Interface {
         Self::Port(port)
     }
 
-    /// Creates a new Read-Only interface
+    /// Creates a new read-only interface
     pub fn from_file_handle(handle: File) -> Self {
         Self::ReadOnlyPool(ReadOnlyPool::new(Box::new(handle)))
+    }
+
+    /// Creates a new gzip read-only interface
+    pub fn from_gzip_file_handle(handle: File) -> Self {
+        Self::ReadOnlyPool(ReadOnlyPool::new(Box::new(GzDecoder::new(handle))))
     }
 
     /// Adds a file handle to a Read Only interface.
@@ -82,6 +89,14 @@ impl Interface {
         match self {
             Self::Port(_) => {}, // invalid use of the API
             Self::ReadOnlyPool(pool) => pool.stack_handle(Box::new(handle)),
+        }
+    }
+
+    /// Adds a gzip compressed file handle to Read Only interface.
+    pub fn stack_gzip_file_handle(&mut self, handle: File) {
+        match self {
+            Self::Port(_) => {}, // invalid use of the API
+            Self::ReadOnlyPool(pool) => pool.stack_handle(Box::new(GzDecoder::new(handle))),
         }
     }
 }

@@ -90,7 +90,11 @@ pub async fn main() {
                 panic!("failed to open {}: {}", user_files[i], e);
             });
 
-            device.interface.stack_file_handle(fd);
+            if user_files[i].ends_with(".gz") {
+                device.interface.stack_gzip_file_handle(fd);
+            } else {
+                device.interface.stack_file_handle(fd);
+            }
         }
 
         device
