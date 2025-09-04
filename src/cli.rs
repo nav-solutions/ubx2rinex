@@ -130,9 +130,10 @@ impl Cli {
                             .value_name("FILENAME")
                             .action(ArgAction::Append)
                             .required_unless_present_any(&["port"])
-                            .help("Load a single file. Use as many as needed.
-Each file descriptor is consumed one after the other. You might have to load them according
-to their sampling chronology to make sure. Gzip file are supported but they must be terminated with '.gz'")
+                            .help("Load a single file. You can load as many as needed.
+Each file descriptor is consumed one after the other (no priority). To obtain valid results,
+you might have to load them in correct chronological order (sampling order).
+Gzip compressed UBX files are natively supported but they must be terminated with '.gz'")
                     )
                     .next_help_heading("RINEX Collection")
                     .arg(
