@@ -7,11 +7,9 @@ use ublox::{
     RxmSfrbxInterpreted,
 };
 
-// use gnss_protos::GpsQzssFrame;
-
 use rinex::prelude::{Constellation, SV};
 
-use crate::ephemeris::PendingFrame;
+use crate::ephemeris::{PendingFrame, PendingGpsQzssFrame};
 
 use std::collections::HashMap;
 
@@ -61,12 +59,14 @@ impl Runtime {
         cfg_precision: Duration,
     ) {
         if let Some(pending) = &mut self.pending_frames.get_mut(&sv) {
+            pending.update(interpretation);
         } else {
-            match sv.constellation {
-                Constellation::GPS | Constellation::QZSS => {
-                    // self.pending_frames.insert(sv, PendingFrame::GpsQzss(PendingGpsQzssFrame::new()));
+            match (sv.constellation, interpretation) {
+                (Constellation::GPS | Constellation::QZSS, RxmSfrbxInterpreted::GpsQzss(frame)) => {
+                    self.pending_frames
+                        .insert(sv, PendingFrame::GpsQzss(PendingGpsQzssFrame::new(frame)));
                 },
-                c => trace!(
+                (c, _) => trace!(
                     "{} - {} constellation not supported yet",
                     self.utc_time().round(cfg_precision),
                     c

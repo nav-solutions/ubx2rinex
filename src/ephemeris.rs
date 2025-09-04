@@ -101,21 +101,17 @@ pub struct PendingGpsQzssFrame {
 }
 
 impl PendingGpsQzssFrame {
-    pub fn update(&mut self, interpretation: RxmSfrbxInterpreted) {
-        match interpretation {
-            RxmSfrbxInterpreted::GpsQzss(frame) => {
-                self.how = frame.how;
-                match frame.subframe {
-                    GpsQzssSubframe::Ephemeris1(subframe) => {
-                        self.frame1 = Some(subframe);
-                    },
-                    GpsQzssSubframe::Ephemeris2(subframe) => {
-                        self.frame2 = Some(subframe);
-                    },
-                    GpsQzssSubframe::Ephemeris3(subframe) => {
-                        self.frame3 = Some(subframe);
-                    },
-                }
+    pub fn update(&mut self, frame: GpsQzssFrame) {
+        self.how = frame.how;
+        match frame.subframe {
+            GpsQzssSubframe::Ephemeris1(subframe) => {
+                self.frame1 = Some(subframe);
+            },
+            GpsQzssSubframe::Ephemeris2(subframe) => {
+                self.frame2 = Some(subframe);
+            },
+            GpsQzssSubframe::Ephemeris3(subframe) => {
+                self.frame3 = Some(subframe);
             },
         }
     }
@@ -179,8 +175,9 @@ impl PendingFrame {
     }
 
     pub fn update(&mut self, interpretation: RxmSfrbxInterpreted) {
-        match self {
-            Self::GpsQzss(pending) => pending.update(interpretation),
+        match (self, interpretation) {
+            (Self::GpsQzss(pending), RxmSfrbxInterpreted::GpsQzss(frame)) => pending.update(frame),
+            _ => {}, // either unhandled or invalid combination
         }
     }
 }
