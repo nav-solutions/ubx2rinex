@@ -25,7 +25,7 @@ use tokio::{
     sync::{mpsc, watch},
 };
 
-use std::fs::File;
+use std::{fs::File, io::ErrorKind};
 
 use rinex::prelude::{Constellation, Duration, Epoch, TimeScale, SV};
 
@@ -293,10 +293,14 @@ async fn consume_device(
             _ => {},
         } //packet
     }) {
+        Ok(0) => {
+            info!("{} - connection terminated", runtime.utc_time().round(cfg_precision));
+            break;
+        },
         Ok(_) => {},
         Err(e) => {
             error!(
-                "{} - runtime error: {}",
+                "{} - I/O error: {}",
                 runtime.utc_time().round(cfg_precision),
                 e
             );

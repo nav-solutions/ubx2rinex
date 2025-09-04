@@ -1,5 +1,8 @@
 use serialport::SerialPort;
-use std::{fs::File, io::Read};
+use std::{
+    fs::File,
+    io::{Error, ErrorKind, Read},
+};
 
 use flate2::read::GzDecoder;
 
@@ -21,6 +24,7 @@ impl std::io::Read for ReadOnlyPool {
 
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.ptr == self.size {
+            // consumed all descriptors
             return Ok(0);
         }
 
