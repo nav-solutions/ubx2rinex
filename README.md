@@ -265,8 +265,34 @@ ubx2rinex -p /dev/ttyACM0 \
           -s "1 s"
 ```
 
-Snapshot period
-===============
+NAV RINEX Collection
+====================
+
+This tool supports NAV RINEX files collection, it is activated with `--nav`.  
+This is currently limited to GPS and QZSS constellation and ephemeris messages. We hope to unlock Galileo, BDS and Glonass message soon. Note that this mode, because it is very particular, is not activated by default.
+The default mode of operation is Observation RINEX collection.
+
+Note that you can disable OBS RINEX collection with `--no-obs`, this is particularly useful
+if you're only interested in dumping NAV RINEX files.
+
+The selected RINEX revision impacts the navigation file content severaly. This is mostly due
+to the fact the RINEX format was not particularly well designed for navigation frames, until V3+.
+Note that our default revision is _V3_, while we correctly support V4. This is a design choice,
+to make the default revision compatible with most post-processing tools, as very few actually
+accept RINEX V4 correctly. We distinguish two different cases:
+
+- V2, V3(Default): when operating in default revision, or selecting `--v2` specifically,
+the tool redacts a legacy Navigation file, where legacy navigation messages are described.
+The ionosphere and orientation models are daily (24h timeframe) and described in the file header.
+
+- V4: when `--v4` is specifically selected, navigation messages are once again updated regularly,
+more messages are introduced and supported.
+But the ionosphere and orientation models are also updated regularly. This is most suited
+for high precision navigation. Once this tool supports more than ephemeris messages, we can
+take advantage of this.
+
+RINEX Colection: Snapshot period
+================================
 
 The snapshot period defines how often we release a RINEX of each kind.
 When the snapshot is being released, the file handled is released and the file is ready to be distributed or post processed.
@@ -285,8 +311,8 @@ NB:
 - the first signal observation is released everyday at midnight 00:00:00 in the main Timescale
 - the last signal observation is released everyday at 23:59:30 in the main Timescale
 
-File rotation and descriptors
-=============================
+RINEX Collection: file rotation and descriptors
+===============================================
 
 `ubx2rinex` owns the File descriptor with write access (only) until the end of this period.  
 That means you can only read the file until the end of the period.
