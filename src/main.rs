@@ -36,6 +36,7 @@ use ublox::{
 mod cli;
 mod collecter;
 mod device;
+mod ephemeris;
 mod runtime;
 mod ubx;
 mod utils;
