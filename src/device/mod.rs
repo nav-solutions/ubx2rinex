@@ -170,27 +170,27 @@ impl Device {
         Ok(())
     }
 
-    pub fn request_mga_gps_eph(&mut self) {
-        match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
-            Ok(_) => {
-                debug!("MGA-GPS-EPH");
-            },
-            Err(e) => {
-                error!("Failed to request MGA-GPS-EPH: {}", e);
-            },
-        }
-    }
+    // pub fn request_mga_gps_eph(&mut self) {
+    //     match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
+    //         Ok(_) => {
+    //             debug!("MGA-GPS-EPH");
+    //         },
+    //         Err(e) => {
+    //             error!("Failed to request MGA-GPS-EPH: {}", e);
+    //         },
+    //     }
+    // }
 
-    pub fn request_mga_glonass_eph(&mut self) {
-        match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
-            Ok(_) => {
-                debug!("MGA-GLO-EPH");
-            },
-            Err(e) => {
-                error!("Failed to request MGA-GLO-EPH: {}", e);
-            },
-        }
-    }
+    // pub fn request_mga_glonass_eph(&mut self) {
+    //     match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
+    //         Ok(_) => {
+    //             debug!("MGA-GLO-EPH");
+    //         },
+    //         Err(e) => {
+    //             error!("Failed to request MGA-GLO-EPH: {}", e);
+    //         },
+    //     }
+    // }
 
     pub fn read_version(&mut self, buffer: &mut [u8], tx: Sender<Message>) -> std::io::Result<()> {
         self.write_all(&UbxPacketRequest::request_for::<MonVer>().into_packet_bytes())

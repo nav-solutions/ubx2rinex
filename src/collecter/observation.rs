@@ -21,14 +21,31 @@ use crate::{
 };
 
 pub struct Collecter {
+    /// Latest [Epoch]
     t: Option<Epoch>,
+
+    /// [Epoch] of deployment
     t0: Option<Epoch>,
+
+    /// Current [Observations] buffer
     buf: Observations,
+
+    /// Redacted [ObsHeader]
     header: Option<ObsHeader>,
+
+    /// [Message]ing handle
     rx: Rx<Message>,
+
+    /// graceful exit
     shutdown: WatchRx<bool>,
+
+    /// [Settings]
     settings: Settings,
+
+    /// [UbloxSettings]
     ubx_settings: UbloxSettings,
+
+    /// Current [FileDescriptor] handle
     fd: Option<BufWriter<FileDescriptor>>,
 }
 
