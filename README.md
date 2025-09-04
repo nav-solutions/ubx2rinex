@@ -45,25 +45,22 @@ of modern devices, and does not cause issues with older firmwares, simply restri
 
 ## Getting started
 
-This application requires a U-Blox streamer, we support both a real-time streamer
-in the form of a serial connection to a U-Blox module, or deserializing a batch of
-U-Blox snapshot (also referred to, as UBX files) into RINEX. 
+This application works from a UBX (U-Blox protocol) stream. It can be managed and
+handled in real-time, when connected to a U-Blox receiver (we call this the active mode),
+or be a UBX snapshot (so called UBX files) that you previously capteured, we call this the passive mode.
 
 Connecting and operating a GNSS module requires more knowledge and involes more options.
-For example, the selection of a constellation and a navigation signal.
-While deserializing UBX files removes all hardware dependent requirements. 
+Mostly, to configure the hardware and operate correctly. One example would be the selection
+of the desired Constellation, and navigation signals. You select this mode of operation by
+connecting to a device with `-p,--port` (mandatory).
 
-To deserialize a UBX file, you select this mode by loading at least one file with `-f,--file`.   
-We refer to this mode, as the "passive mode", in the sense the interface is read only.
+When operating in passive mode, all hardware related options no longer apply.
+You select this mode of operation by loading at least one file with `-f,--file` (mandatory).
 
-To operate UBX2RINEX on the fly while connected to a U-Blox, you define the input port with `-p,--port`.   
-We refer to this mode, as the "active mode", in the sense this a both a Read + Write operation,
-the GNSS module _can_ or _needs_ to be configured to achieve the task of UBX2RINEX collection (mainly: sampling management).
+In any case, either `-p,--port` or `-f,--file` is required and they are mutually exclusive:
+you cannot operate in both modes at the same time.
 
-In any case, either `-p,--port` or `-f,--file` is required, and are mutually exclusive, you cannot operate
-in both modes at the same time.
-
-## Connection to a U-Blox module
+## Connecting to a U-Blox receiver
 
 To deploy in active mode, you must at least select one Constellation and one signal.  
 We propose one flag per constellation, modern UBlox supports tracking of up to 3 constellations.
@@ -119,9 +116,26 @@ ubx2rinex -p /dev/ttyUSB1 --gps --glonass --l1
 Any other constellation flags has no effect. Selecting other signals has no effect.
 Removing L1 signal would create invalid RINEX.
 
+## Deserializing UBX files
+
+You can use `UBX2RINEX` to deserialize your UBX snapshots to OBS, NAV and OBS+NAV RINEX files.  
+This mode is selected by loading _at least_ one UBX file into the interface with `-f,--file`.   
+We support `gzip` compressed UBX files as well, but their name must be terminated with `.ubx`.
+
+Deploying `UBX2RINEX` in passive mode:
+
+```bash
+ubx2rinex -f /tmp/snapshot1.ubx -f /tmp/snapshot2.ubx.gz 
+```
+
+Note that constellation and signal selection are no longer required, they no longer apply.
+If you happen to use one of those flags, the application will not crash, it will simply do not generate anything.  
+
+Any options related to data collection still applies to the passive mode.
+
 ## Application logs
 
-`ubx2rinex` uses the Rust logger for tracing events in real-time and not disturb the collection process.  
+`UBX2RINEX` uses the Rust logger for tracing events in real-time and not disturb the collection process.  
 To activate the application logs, simply define the `$RUST_LOG` variable:
 
 ```bash
