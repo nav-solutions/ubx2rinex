@@ -5,6 +5,7 @@ UBX2RINEX
 [![Rust](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml/badge.svg)](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml)
 [![crates.io](https://img.shields.io/crates/v/ubx2rinex.svg)](https://crates.io/crates/ubx2rinex)
 
+[![MRSV](https://img.shields.io/badge/MSRV-1.82.0-orange?style=for-the-badge)](https://github.com/rust-lang/rust/releases/tag/1.82.0)
 [![License](https://img.shields.io/badge/license-MPL_2.0-orange?style=for-the-badge&logo=mozilla)](https://github.com/nav-solutions/ubx2rinex/blob/main/LICENSE)
 
 `ubx2rinex` is a small command line utility to deserialize
@@ -14,7 +15,7 @@ a U-Blox data stream into standardized RINEX file(s).
 
 ## Licensing
 
-This application is part of the [RTK-rs framework](https://github.com/nav-solutions) which
+This application is part of the [nav-solutions framework](https://github.com/nav-solutions) which
 is delivered under the [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
 
 ## Install from Cargo
