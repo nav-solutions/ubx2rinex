@@ -34,7 +34,6 @@ use ublox::{NavTimeUtcFlags, PacketRef, RecStatFlags};
 mod cli;
 mod collecter;
 mod device;
-mod ephemeris;
 mod runtime;
 mod ubx;
 mod utils;
@@ -329,7 +328,7 @@ pub async fn main() {
 
     let cfg_precision = Duration::from_seconds(1.0);
 
-    let mut t_utc = Epoch::now()
+    let t_utc = Epoch::now()
         .unwrap_or_else(|e| panic!("Failed to determine system time: {}", e))
         .to_time_scale(TimeScale::UTC);
 
