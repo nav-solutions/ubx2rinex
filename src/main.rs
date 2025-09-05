@@ -70,47 +70,52 @@ fn consume_device(
                 // let _dyn_model = pkt.dyn_model();
             },
             PacketRef::RxmSfrbx(sfrbx) => {
-                let gnss_id = sfrbx.gnss_id();
+                // Do not process if user is not interested in this channel.
+                // When attached to hardware this naturally never happens.
+                // But this may arise in passive mode.
+                if ubx_settings.ephemeris {
+                    let gnss_id = sfrbx.gnss_id();
 
-                match to_constellation(gnss_id) {
-                    Some(constellation) => {
-                        let sv = SV::new(constellation, sfrbx.sv_id());
+                    match to_constellation(gnss_id) {
+                        Some(constellation) => {
+                            let sv = SV::new(constellation, sfrbx.sv_id());
 
-                        match constellation {
-                            Constellation::GPS | Constellation::QZSS => {
-                                // decode
-                                if let Some(interpretation) = sfrbx.interpret() {
-                                    runtime.latch_sfrbx(sv, interpretation, cfg_precision);
-                                } else {
+                            match constellation {
+                                Constellation::GPS | Constellation::QZSS => {
+                                    // decode
+                                    if let Some(interpretation) = sfrbx.interpret() {
+                                        runtime.latch_sfrbx(sv, interpretation, cfg_precision);
+                                    } else {
+                                        error!(
+                                            "{} - SFRBX interpretation issue",
+                                            runtime.utc_time().round(cfg_precision)
+                                        );
+                                    }
+                                },
+                                c => {
                                     error!(
-                                        "{} - SFRBX interpretation issue",
-                                        runtime.utc_time().round(cfg_precision)
+                                        "{} - {} constellation not handled yet",
+                                        runtime.utc_time().round(cfg_precision),
+                                        c
                                     );
-                                }
-                            },
-                            c => {
-                                error!(
-                                    "{} - {} constellation not handled yet",
-                                    runtime.utc_time().round(cfg_precision),
-                                    c
-                                );
-                            },
-                        }
-                    },
-                    None => {
-                        error!(
-                            "{} - constellation id error #{}",
-                            runtime.utc_time().round(cfg_precision),
-                            gnss_id
-                        );
-                    },
+                                },
+                            }
+                        },
+                        None => {
+                            error!(
+                                "{} - constellation id error #{}",
+                                runtime.utc_time().round(cfg_precision),
+                                gnss_id
+                            );
+                        },
+                    }
                 }
             },
 
             PacketRef::RxmRawx(pkt) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
-                // But in passive mode it does not.
+                // But this may arise in passive mode.
                 if ubx_settings.rawxm {
                     let gpst_tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
 
@@ -276,24 +281,27 @@ fn consume_device(
             },
 
             PacketRef::MgaGpsEph(_) | PacketRef::MgaGloEph(_) => {
-                // MGA-EPH downlink
+                // MGA-EPH uplink
             },
 
             PacketRef::MgaGpsIono(_) => {
-                // MGA-IONO downlink
+                // MGA-IONO
             },
 
             PacketRef::NavClock(pkt) => {
-                let clock = pkt.clk_bias();
-                match obs_tx.try_send(Message::Clock(clock)) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        error!(
-                            "{} - failed to send clock state: {}",
-                            runtime.utc_time().round(cfg_precision),
-                            e
-                        );
-                    },
+                // Do not process if user is not interested in this channel.
+                if ubx_settings.rawxm && ubx_settings.rx_clock {
+                    let clock = pkt.clk_bias();
+                    match obs_tx.try_send(Message::Clock(clock)) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            error!(
+                                "{} - failed to send clock state: {}",
+                                runtime.utc_time().round(cfg_precision),
+                                e
+                            );
+                        },
+                    }
                 }
             },
 
@@ -412,7 +420,7 @@ pub async fn main() {
     let (shutdown_tx, shutdown_rx) = watch::channel(true);
 
     // Observation RINEX
-    let (mut obs_tx, obs_rx) = mpsc::channel(32);
+    let (mut obs_tx, obs_rx) = mpsc::channel(128);
 
     let mut obs_collecter = ObsCollecter::new(
         settings.clone(),
@@ -422,7 +430,7 @@ pub async fn main() {
     );
 
     // Navigation RINEX
-    let (mut nav_tx, nav_rx) = mpsc::channel(32);
+    let (mut nav_tx, nav_rx) = mpsc::channel(128);
 
     let mut nav_collecter = NavCollecter::new(
         t_utc,
