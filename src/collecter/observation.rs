@@ -11,7 +11,7 @@ use rinex::{
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Epoch, Header, Observable, RinexType, CRINEX,
+        Constellation, Epoch, Header, Observable, RinexType, CRINEX,
     },
 };
 
@@ -284,6 +284,13 @@ impl Collecter {
         // revision
         header.rinex_type = RinexType::ObservationData;
         header.version.major = self.settings.major;
+
+        // GNSS
+        if self.ubx_settings.constellations.len() == 1 {
+            header.constellation = Some(self.ubx_settings.constellations[0]);
+        } else {
+            header.constellation = Some(Constellation::Mixed);
+        }
 
         // CRINEX
         if self.settings.crinex {
