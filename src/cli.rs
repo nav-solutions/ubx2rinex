@@ -393,11 +393,11 @@ You can combine this to CRINEX compression for effiency."))
 
     fn observables(&self) -> HashMap<Constellation, Vec<Observable>> {
         let v2 = self.matches.get_flag("v2");
-        let mut ret = HashMap::new();
+        let mut ret = HashMap::<Constellation, Vec<Observable>>::new();
 
         for constell in self.constellations().iter() {
             if self.l1() {
-                let mut values = match constell {
+                let mut observables = match constell {
                     Constellation::GPS
                     | Constellation::Glonass
                     | Constellation::Galileo
@@ -424,21 +424,26 @@ You can combine this to CRINEX compression for effiency."))
                 };
 
                 if self.no_dop() {
-                    values.retain(|code| !code.is_doppler_observable());
+                    observables.retain(|code| !code.is_doppler_observable());
                 }
                 if self.no_phase() {
-                    values.retain(|code| !code.is_phase_range_observable());
+                    observables.retain(|code| !code.is_phase_range_observable());
                 }
                 if self.no_pr() {
-                    values.retain(|code| !code.is_pseudo_range_observable());
+                    observables.retain(|code| !code.is_pseudo_range_observable());
                 }
-                if !values.is_empty() {
-                    ret.insert(*constell, values);
+
+                for observable in observables.iter() {
+                    if let Some(observables) = ret.get_mut(constell) {
+                        observables.push(observable.clone());
+                    } else {
+                        ret.insert(*constell, vec![observable.clone()]);
+                    }
                 }
             }
 
             if self.l2() {
-                let mut values = match constell {
+                let mut observables = match constell {
                     Constellation::GPS
                     | Constellation::SBAS
                     | Constellation::BeiDou
@@ -464,21 +469,26 @@ You can combine this to CRINEX compression for effiency."))
                 };
 
                 if self.no_dop() {
-                    values.retain(|code| !code.is_doppler_observable());
+                    observables.retain(|code| !code.is_doppler_observable());
                 }
                 if self.no_phase() {
-                    values.retain(|code| !code.is_phase_range_observable());
+                    observables.retain(|code| !code.is_phase_range_observable());
                 }
                 if self.no_pr() {
-                    values.retain(|code| !code.is_pseudo_range_observable());
+                    observables.retain(|code| !code.is_pseudo_range_observable());
                 }
-                if !values.is_empty() {
-                    ret.insert(*constell, values);
+
+                for observable in observables.iter() {
+                    if let Some(observables) = ret.get_mut(constell) {
+                        observables.push(observable.clone());
+                    } else {
+                        ret.insert(*constell, vec![observable.clone()]);
+                    }
                 }
             }
 
             if self.l5() {
-                let mut values = match constell {
+                let mut observables = match constell {
                     Constellation::GPS
                     | Constellation::SBAS
                     | Constellation::Galileo
@@ -503,16 +513,21 @@ You can combine this to CRINEX compression for effiency."))
                 };
 
                 if self.no_dop() {
-                    values.retain(|code| !code.is_doppler_observable());
+                    observables.retain(|code| !code.is_doppler_observable());
                 }
                 if self.no_phase() {
-                    values.retain(|code| !code.is_phase_range_observable());
+                    observables.retain(|code| !code.is_phase_range_observable());
                 }
                 if self.no_pr() {
-                    values.retain(|code| !code.is_pseudo_range_observable());
+                    observables.retain(|code| !code.is_pseudo_range_observable());
                 }
-                if !values.is_empty() {
-                    ret.insert(*constell, values);
+
+                for observable in observables.iter() {
+                    if let Some(observables) = ret.get_mut(constell) {
+                        observables.push(observable.clone());
+                    } else {
+                        ret.insert(*constell, vec![observable.clone()]);
+                    }
                 }
             }
         }
