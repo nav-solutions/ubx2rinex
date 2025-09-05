@@ -155,13 +155,12 @@ fn consume_device(
 
                     for meas in pkt.measurements() {
                         let pr = meas.pr_mes();
-                        let _pr_stddev = meas.pr_stdev();
-
                         let cp = meas.cp_mes();
-                        let _cp_stddev = meas.cp_stdev();
-
                         let dop = meas.do_mes();
-                        let _dop_stddev = meas.do_stdev();
+
+                        let _ = meas.pr_stdev(); // CXX deviation
+                        let _ = meas.cp_stdev(); // LXX deviation
+                        let _ = meas.do_stdev(); // DXX deviation
 
                         // let freq_id = meas.freq_id();
                         let gnss_id = meas.gnss_id();
