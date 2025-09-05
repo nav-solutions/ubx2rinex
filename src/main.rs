@@ -18,6 +18,8 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
+use itertools::Itertools;
+
 use env_logger::{Builder, Target};
 
 use log::{debug, error, info, trace, warn};
@@ -206,8 +208,52 @@ fn consume_device(
                     }
                 }
             },
-            PacketRef::MonHw(_pkt) => {
-                // TODO customize RINEX header
+            PacketRef::MonVer(mon_version) => {
+                let software_version = mon_version.software_version().to_string();
+
+                match obs_tx.try_send(Message::FirmwareVersion(software_version)) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!(
+                            "{} - failed to send firmware version: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
+                    },
+                }
+
+                let comment = format!("UBlox hardware version: {}", mon_version.hardware_version());
+
+                match obs_tx.try_send(Message::HeaderComment(comment)) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!(
+                            "{} - failed to send hardware version: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
+                    },
+                }
+
+                let comment = format!("UBlox protocol: {}", mon_version.extension().join(","));
+
+                match obs_tx.try_send(Message::HeaderComment(comment)) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!(
+                            "{} - failed to send ublox proto version: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
+                    },
+                }
+            },
+            PacketRef::MonHw(mon_hardware) => {
+                // TODO: contributes to hardware events
+                let _ = mon_hardware.a_status();
+
+                // TODO: contributes to hardware events
+                let _ = mon_hardware.a_power();
             },
             PacketRef::NavSat(pkt) => {
                 for sv in pkt.svs() {

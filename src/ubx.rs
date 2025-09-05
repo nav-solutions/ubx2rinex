@@ -41,7 +41,7 @@ pub struct Settings {
 
     /// Firmware version
     pub firmware: Option<String>,
-    
+
     /// Receiver antenna model/label
     pub antenna: Option<String>,
 }

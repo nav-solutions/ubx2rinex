@@ -7,12 +7,12 @@ use std::{
 
 use rinex::{
     error::FormattingError,
+    hardware::{Antenna, Receiver},
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
         Epoch, Header, Observable, RinexType, CRINEX,
     },
-    hardware::{Receiver, Antenna},
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
@@ -51,6 +51,9 @@ pub struct Collecter {
 
     /// Current [FileDescriptor] handle
     fd: Option<BufWriter<FileDescriptor>>,
+
+    /// List of header comments
+    header_comments: Vec<String>,
 }
 
 impl Collecter {
@@ -65,12 +68,13 @@ impl Collecter {
             rx,
             shutdown,
             settings,
-            fd: None,
-            deploy_epoch: None,
-            epoch: None,
-            header: None,
             ubx_settings: ublox,
+            fd: Default::default(),
+            deploy_epoch: Default::default(),
+            epoch: Default::default(),
+            header: Default::default(),
             buf: Observations::default(),
+            header_comments: Default::default(),
         }
     }
 
@@ -115,6 +119,12 @@ impl Collecter {
                         }
 
                         return; // abort
+                    },
+
+                    Message::HeaderComment(comment) => {
+                        if self.header_comments.len() < 16 {
+                            self.header_comments.push(comment);
+                        }
                     },
 
                     Message::Clock(clock) => {
@@ -266,14 +276,16 @@ impl Collecter {
     fn build_header(&self) -> Header {
         let mut header = Header::default();
 
-        header.rinex_type = RinexType::ObservationData;
-        header.version.major = self.settings.major;
-
         let mut antenna = Option::<Antenna>::None;
         let mut receiver = Option::<Receiver>::None;
 
         let mut obs_header = ObsHeader::default();
 
+        // revision
+        header.rinex_type = RinexType::ObservationData;
+        header.version.major = self.settings.major;
+
+        // CRINEX
         if self.settings.crinex {
             let mut crinex = CRINEX::default();
 
@@ -285,7 +297,12 @@ impl Collecter {
 
             obs_header.crinex = Some(crinex);
         }
-        
+
+        // custom comments
+        if !self.header_comments.is_empty() {
+            header.comments = self.header_comments.clone();
+        }
+
         // custom operator
         if let Some(operator) = &self.settings.operator {
             header.observer = Some(operator.clone());
@@ -311,7 +328,7 @@ impl Collecter {
             } else {
                 receiver = Some(Receiver::default().with_firmware(firmware));
             }
-        }   
+        }
 
         header.rcvr = receiver;
 
