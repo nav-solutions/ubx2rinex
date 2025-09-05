@@ -52,6 +52,8 @@ use crate::{
     utils::to_constellation,
 };
 
+const SBAS_PRN_OFFSET: u8 = 100;
+
 fn consume_device(
     runtime: &mut Runtime,
     obs_tx: &mut mpsc::Sender<Message>,
@@ -78,7 +80,13 @@ fn consume_device(
 
                     match to_constellation(gnss_id) {
                         Some(constellation) => {
-                            let sv = SV::new(constellation, sfrbx.sv_id());
+                            let mut prn = sfrbx.sv_id();
+
+                            if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                                prn -= SBAS_PRN_OFFSET;
+                            }
+
+                            let sv = SV::new(constellation, prn);
 
                             match constellation {
                                 Constellation::GPS | Constellation::QZSS => {
@@ -172,7 +180,12 @@ fn consume_device(
 
                         // does not process if we're not interested by this system
                         if ubx_settings.constellations.contains(&constell) {
-                            let prn = meas.sv_id();
+                            let mut prn = meas.sv_id();
+
+                            if constell.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                                prn -= SBAS_PRN_OFFSET;
+                            };
+
                             let sv = SV::new(constell, prn);
                             let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
 
@@ -211,10 +224,13 @@ fn consume_device(
                     let _pr_res = sv.pr_res();
                     let _flags = sv.flags();
 
-                    let _sv = SV {
-                        constellation,
-                        prn: sv.sv_id(),
-                    };
+                    let mut prn = sv.sv_id();
+
+                    if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                        prn -= SBAS_PRN_OFFSET;
+                    }
+
+                    let sv = SV::new(constellation, prn);
 
                     // flags.sv_used()
                     //flags.health();
