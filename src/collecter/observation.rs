@@ -12,6 +12,7 @@ use rinex::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
         Epoch, Header, Observable, RinexType, CRINEX,
     },
+    hardware::{Receiver, Antenna},
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
@@ -212,9 +213,9 @@ impl Collecter {
 
         let header = self.build_header();
 
-        header.format(&mut fd)?;
+        header.format(&mut fd)?; // must pass
 
-        let _ = fd.flush();
+        let _ = fd.flush(); // can fail
 
         self.fd = Some(fd);
         self.header = Some(header.obs.unwrap().clone());
@@ -256,6 +257,7 @@ impl Collecter {
                     "{} - internal error: failed to release pending epoch",
                     epoch
                 );
+
                 error!("{} - internal error: incomplete RINEX header", epoch);
             },
         }
@@ -266,6 +268,9 @@ impl Collecter {
 
         header.rinex_type = RinexType::ObservationData;
         header.version.major = self.settings.major;
+
+        let mut antenna = Option::<Antenna>::None;
+        let mut receiver = Option::<Receiver>::None;
 
         let mut obs_header = ObsHeader::default();
 
@@ -280,18 +285,44 @@ impl Collecter {
 
             obs_header.crinex = Some(crinex);
         }
-
+        
+        // custom operator
         if let Some(operator) = &self.settings.operator {
             header.observer = Some(operator.clone());
         }
 
+        // custom agency
         if let Some(agency) = &self.settings.agency {
             header.agency = Some(agency.clone());
         }
 
-        obs_header.codes = self.settings.observables.clone();
+        // custom receiver
+        if let Some(model) = &self.ubx_settings.model {
+            if let Some(receiver) = &mut receiver {
+                *receiver = receiver.with_model(model);
+            } else {
+                receiver = Some(Receiver::default().with_model(model));
+            }
+        }
 
-        println!("CODES: {:?}", obs_header.codes);
+        if let Some(firmware) = &self.ubx_settings.firmware {
+            if let Some(receiver) = &mut receiver {
+                *receiver = receiver.with_firmware(firmware);
+            } else {
+                receiver = Some(Receiver::default().with_firmware(firmware));
+            }
+        }   
+
+        header.rcvr = receiver;
+
+        // custom antenna
+        if let Some(model) = &self.ubx_settings.antenna {
+            antenna = Some(Antenna::default().with_model(model));
+        }
+
+        header.rcvr_antenna = antenna;
+
+        obs_header.codes = self.settings.observables.clone();
 
         header.obs = Some(obs_header);
         header

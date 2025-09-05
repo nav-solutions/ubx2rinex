@@ -36,11 +36,14 @@ pub struct Settings {
     /// RX-clock enabled
     pub rx_clock: bool,
 
-    /// RX model
+    /// Receiver model
     pub model: Option<String>,
 
     /// Firmware version
     pub firmware: Option<String>,
+    
+    /// Receiver antenna model/label
+    pub antenna: Option<String>,
 }
 
 impl Settings {

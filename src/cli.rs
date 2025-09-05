@@ -129,6 +129,14 @@ impl Cli {
                             .value_name("Receiver model/name/label")
                             .help("Define the name or label of this receiver. Customizes your RINEX content. For example \"M8T\" when using an undefined M8-T device.")
                     )
+                    .arg(
+                        Arg::new("antenna")
+                            .short('a')
+                            .long("antenna")
+                            .required(false)
+                            .value_name("Receiver antenna model/name/label")
+                            .help("Define the name or label of antenna attached to this receiver.
+Customizes your RINEX content."))
                     .next_help_heading("File interface (Passive mode)")
                     .arg(
                         Arg::new("file")
@@ -558,6 +566,11 @@ You can combine this to CRINEX compression for effiency."))
             firmware: None,
             model: if let Some(model) = self.matches.get_one::<String>("model") {
                 Some(model.to_string())
+            } else {
+                None
+            },
+            antenna: if let Some(antenna) = self.matches.get_one::<String>("antenna") {
+                Some(antenna.to_string())
             } else {
                 None
             },
