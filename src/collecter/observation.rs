@@ -87,20 +87,20 @@ impl Collecter {
     pub async fn run(&mut self) {
         let cfg_precision = Duration::from_seconds(1.0);
 
-        // TODO: These value may differ depending on the 
+        // TODO: These value may differ depending on the
         // signal band and constellation.. will not be 100% correct..
         let c1c = if self.settings.major == 3 {
             Observable::from_str("C1C").unwrap()
         } else {
             Observable::from_str("C1").unwrap()
         };
-        
+
         let c2c = if self.settings.major == 3 {
             Observable::from_str("C2C").unwrap()
         } else {
             Observable::from_str("C2").unwrap()
         };
-        
+
         let c5c = if self.settings.major == 3 {
             Observable::from_str("C5C").unwrap()
         } else {
@@ -112,13 +112,13 @@ impl Collecter {
         } else {
             Observable::from_str("L1").unwrap()
         };
-        
+
         let l2c = if self.settings.major == 3 {
             Observable::from_str("L2C").unwrap()
         } else {
             Observable::from_str("L2").unwrap()
         };
-        
+
         let l5c = if self.settings.major == 3 {
             Observable::from_str("L5C").unwrap()
         } else {
@@ -130,13 +130,13 @@ impl Collecter {
         } else {
             Observable::from_str("D1").unwrap()
         };
-        
+
         let d2c = if self.settings.major == 3 {
             Observable::from_str("D2C").unwrap()
         } else {
             Observable::from_str("D2").unwrap()
         };
-        
+
         let d5c = if self.settings.major == 3 {
             Observable::from_str("D5C").unwrap()
         } else {
