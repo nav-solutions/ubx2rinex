@@ -1,3 +1,5 @@
+use log::{debug, error, trace};
+
 use std::{
     io::{BufWriter, Write},
     str::FromStr,
@@ -13,19 +15,19 @@ use rinex::{
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
 
-use log::error;
-
 use crate::{
     collecter::{fd::FileDescriptor, settings::Settings, Message},
     UbloxSettings,
 };
 
+use hifitime::prelude::Duration;
+
 pub struct Collecter {
     /// Latest [Epoch]
-    t: Option<Epoch>,
+    epoch: Option<Epoch>,
 
     /// [Epoch] of deployment
-    t0: Option<Epoch>,
+    deploy_epoch: Option<Epoch>,
 
     /// Current [Observations] buffer
     buf: Observations,
@@ -62,8 +64,8 @@ impl Collecter {
             shutdown,
             settings,
             fd: None,
-            t0: None,
-            t: None,
+            deploy_epoch: None,
+            epoch: None,
             header: None,
             ubx_settings: ublox,
             buf: Observations::default(),
@@ -77,10 +79,30 @@ impl Collecter {
     }
 
     pub async fn run(&mut self) {
+        let cfg_precision = Duration::from_seconds(1.0);
+
+        // TODO: improve observables definition & handling..
+        let c1c = if self.settings.major == 3 {
+            Observable::from_str("C1C").unwrap()
+        } else {
+            Observable::from_str("C1").unwrap()
+        };
+
+        let l1c = if self.settings.major == 3 {
+            Observable::from_str("L1C").unwrap()
+        } else {
+            Observable::from_str("L1").unwrap()
+        };
+
+        let d1c = if self.settings.major == 3 {
+            Observable::from_str("D1C").unwrap()
+        } else {
+            Observable::from_str("D1").unwrap()
+        };
+
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg {
-                    Message::Timestamp(_t) => {},
                     Message::FirmwareVersion(version) => {
                         self.ubx_settings.firmware = Some(version.to_string());
                     },
@@ -89,10 +111,17 @@ impl Collecter {
                         if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
                             self.release_epoch();
                         }
-                        return;
+
+                        return; // abort
                     },
 
                     Message::Clock(clock) => {
+                        debug!(
+                            "{} - new clock state: {}",
+                            self.epoch.unwrap_or_default().round(cfg_precision),
+                            clock
+                        );
+
                         let bias = clock * 1.0E-3;
                         let mut clock = ClockObservation::default();
                         clock.set_offset_s(Default::default(), bias);
@@ -100,47 +129,38 @@ impl Collecter {
                     },
 
                     Message::Measurement(rawxm) => {
-                        if self.t0.is_none() {
-                            self.t0 = Some(rawxm.t);
+                        debug!(
+                            "{} - RXM-RAWX: {}",
+                            self.epoch.unwrap_or_default().round(cfg_precision),
+                            rawxm.epoch
+                        );
+
+                        if self.deploy_epoch.is_none() {
+                            self.deploy_epoch = Some(rawxm.epoch);
                             self.release_header();
                         }
 
-                        if self.t.is_none() {
-                            self.t = Some(rawxm.t);
+                        if self.epoch.is_none() {
+                            self.epoch = Some(rawxm.epoch);
                         }
 
-                        let t = self.t.unwrap();
+                        let epoch = self.epoch.unwrap();
 
-                        if rawxm.t > t {
+                        if rawxm.epoch > epoch {
+                            // new epoch
+                            debug!("{} - new epoch", rawxm.epoch.round(cfg_precision));
+
                             if self.buf.signals.len() > 0 || self.buf.clock.is_some() {
                                 self.release_epoch();
                             }
                         }
-
-                        let c1c = if self.settings.major == 3 {
-                            Observable::from_str("C1C").unwrap()
-                        } else {
-                            Observable::from_str("C1").unwrap()
-                        };
-
-                        let l1c = if self.settings.major == 3 {
-                            Observable::from_str("L1C").unwrap()
-                        } else {
-                            Observable::from_str("L1").unwrap()
-                        };
-
-                        let d1c = if self.settings.major == 3 {
-                            Observable::from_str("D1C").unwrap()
-                        } else {
-                            Observable::from_str("D1").unwrap()
-                        };
 
                         self.buf.signals.push(SignalObservation {
                             sv: rawxm.sv,
                             lli: None,
                             snr: None,
                             value: rawxm.cp,
-                            observable: c1c,
+                            observable: c1c.clone(),
                         });
 
                         self.buf.signals.push(SignalObservation {
@@ -148,7 +168,7 @@ impl Collecter {
                             lli: None,
                             snr: None,
                             value: rawxm.pr,
-                            observable: l1c,
+                            observable: l1c.clone(),
                         });
 
                         self.buf.signals.push(SignalObservation {
@@ -156,10 +176,10 @@ impl Collecter {
                             lli: None,
                             snr: None,
                             value: rawxm.dop as f64,
-                            observable: d1c,
+                            observable: d1c.clone(),
                         });
 
-                        self.t = Some(rawxm.t);
+                        self.epoch = Some(rawxm.epoch);
                     },
                     _ => {},
                 },
@@ -169,10 +189,10 @@ impl Collecter {
     }
 
     fn release_header(&mut self) {
-        let t0 = self.t0.unwrap();
+        let deploy_epoch = self.deploy_epoch.unwrap();
 
         // obtain new file, release header
-        let mut fd = BufWriter::new(self.fd(t0));
+        let mut fd = BufWriter::new(self.fd(deploy_epoch));
 
         let header = self.build_header();
 
@@ -190,31 +210,40 @@ impl Collecter {
     }
 
     fn release_epoch(&mut self) {
-        let t = self.t.unwrap();
+        let epoch = self.epoch.unwrap_or_default();
 
         let key = ObsKey {
-            epoch: t,
-            flag: EpochFlag::Ok, // TODO,
+            epoch,
+            flag: EpochFlag::Ok, // TODO: manage events correctly
         };
 
         let mut fd = self.fd.as_mut().unwrap();
 
-        let header = self
-            .header
-            .as_ref()
-            .expect("internal error: missing Observation header");
+        match self.header.as_ref() {
+            Some(header) => {
+                match self
+                    .buf
+                    .format(self.settings.major == 2, &key, header, &mut fd)
+                {
+                    Ok(_) => {
+                        let _ = fd.flush(); // improves interaction
 
-        match self
-            .buf
-            .format(self.settings.major == 2, &key, header, &mut fd)
-        {
-            Ok(_) => {
-                let _ = fd.flush();
-                self.buf.clock = None;
-                self.buf.signals.clear();
+                        self.buf.clock = None;
+                        self.buf.signals.clear();
+
+                        debug!("{} - new epoch released", epoch);
+                    },
+                    Err(e) => {
+                        error!("{} - failed to format pending epoch: {}", epoch, e);
+                    },
+                }
             },
-            Err(e) => {
-                error!("{} formatting issue: {}", t, e);
+            None => {
+                error!(
+                    "{} - internal error: failed to release pending epoch",
+                    epoch
+                );
+                error!("{} - internal error: incomplete RINEX header", epoch);
             },
         }
     }

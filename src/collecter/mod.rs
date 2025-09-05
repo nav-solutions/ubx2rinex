@@ -20,9 +20,6 @@ pub enum Message {
     /// [Message::EndofEpoch] notification
     EndofEpoch(Epoch),
 
-    /// [Epoch] update
-    Timestamp(Epoch),
-
     /// New clock state [s]
     Clock(f64),
 

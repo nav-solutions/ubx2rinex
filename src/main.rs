@@ -56,10 +56,17 @@ fn consume_device(
     nav_tx: &mut mpsc::Sender<Message>,
     device: &mut Device,
     buffer: &mut [u8],
-    cfg_timescale: TimeScale,
     cfg_precision: Duration,
+    ubx_settings: &UbloxSettings,
 ) -> std::io::Result<usize> {
     let mut end_of_nav_epoch = false;
+
+    if device.interface.is_read_only() {
+        // detached from hardware, we don't have the machine rate
+        // acting as a throttle.
+        // Add a little bit of dead-time to reduce pressure on the data channel.
+        std::thread::sleep(std::time::Duration::from_millis(250));
+    }
 
     device.consume_all_cb(buffer, |packet| {
         match packet {
@@ -80,14 +87,14 @@ fn consume_device(
                                 if let Some(interpretation) = sfrbx.interpret() {
                                     runtime.latch_sfrbx(sv, interpretation, cfg_precision);
                                 } else {
-                                    debug!(
+                                    error!(
                                         "{} - SFRBX interpretation issue",
                                         runtime.utc_time().round(cfg_precision)
                                     );
                                 }
                             },
                             c => {
-                                trace!(
+                                error!(
                                     "{} - {} constellation not handled yet",
                                     runtime.utc_time().round(cfg_precision),
                                     c
@@ -96,7 +103,7 @@ fn consume_device(
                         }
                     },
                     None => {
-                        debug!(
+                        error!(
                             "{} - constellation id error #{}",
                             runtime.utc_time().round(cfg_precision),
                             gnss_id
@@ -104,74 +111,82 @@ fn consume_device(
                     },
                 }
             },
+
             PacketRef::RxmRawx(pkt) => {
-                let gpst_tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
-                let t_gpst =
-                    Epoch::from_time_of_week(pkt.week() as u32, gpst_tow_nanos, TimeScale::GPST);
+                // Do not process if user is not interested in this channel.
+                // When attached to hardware this naturally never happens.
+                // But in passive mode it does not.
+                if ubx_settings.rawxm {
+                    let gpst_tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
 
-                runtime.new_epoch(t_gpst, cfg_timescale);
-
-                let stat = pkt.rec_stat();
-
-                if stat.intersects(RecStatFlags::CLK_RESET) {
-                    error!("{} - clock reset!", t_gpst.round(cfg_precision));
-
-                    warn!(
-                        "{} - declaring phase cycle slip! - !!case is not handled!!",
-                        t_gpst.round(cfg_precision)
+                    let t_gpst = Epoch::from_time_of_week(
+                        pkt.week() as u32,
+                        gpst_tow_nanos,
+                        TimeScale::GPST,
                     );
 
-                    error!(
-                        "{} - phase cycle slip not correctly managed in current version",
-                        t_gpst.round(cfg_precision)
-                    );
-                }
+                    runtime.new_epoch(t_gpst, ubx_settings.timescale);
 
-                for meas in pkt.measurements() {
-                    let pr = meas.pr_mes();
-                    let _pr_stddev = meas.pr_stdev();
+                    let stat = pkt.rec_stat();
 
-                    let cp = meas.cp_mes();
-                    let _cp_stddev = meas.cp_stdev();
+                    if stat.intersects(RecStatFlags::CLK_RESET) {
+                        error!("{} - clock reset!", t_gpst.round(cfg_precision));
 
-                    let dop = meas.do_mes();
-                    let _dop_stddev = meas.do_stdev();
-
-                    // let freq_id = meas.freq_id();
-                    let gnss_id = meas.gnss_id();
-                    let cno = meas.cno();
-
-                    let constell = to_constellation(gnss_id);
-
-                    if constell.is_none() {
-                        error!(
-                            "{} - unknown constellation: #{}",
-                            runtime.utc_time().round(cfg_precision),
-                            gnss_id
+                        warn!(
+                            "{} - declaring phase cycle slip! - !!case is not handled!!",
+                            t_gpst.round(cfg_precision)
                         );
-                        continue;
+
+                        error!(
+                            "{} - phase cycle slip not correctly managed in current version",
+                            t_gpst.round(cfg_precision)
+                        );
                     }
 
-                    let constell = constell.unwrap();
+                    for meas in pkt.measurements() {
+                        let pr = meas.pr_mes();
+                        let _pr_stddev = meas.pr_stdev();
 
-                    let prn = meas.sv_id();
-                    let sv = SV::new(constell, prn);
-                    let t_meas = t_gpst.to_time_scale(cfg_timescale);
+                        let cp = meas.cp_mes();
+                        let _cp_stddev = meas.cp_stdev();
 
-                    let rawxm = Rawxm::new(t_meas, sv, pr, cp, dop, cno);
+                        let dop = meas.do_mes();
+                        let _dop_stddev = meas.do_stdev();
 
-                    match obs_tx.try_send(Message::Measurement(rawxm)) {
-                        Ok(_) => {
-                            debug!("{}({}) - RAWXM {}", t_meas.round(cfg_precision), sv, rawxm);
-                        },
-                        Err(e) => {
+                        // let freq_id = meas.freq_id();
+                        let gnss_id = meas.gnss_id();
+                        let cno = meas.cno();
+
+                        let constell = to_constellation(gnss_id);
+
+                        if constell.is_none() {
                             error!(
-                                "{}({}) missed measurement: {}",
-                                t_meas.round(cfg_precision),
-                                sv,
-                                e
+                                "{} - unknown constellation: #{}",
+                                runtime.utc_time().round(cfg_precision),
+                                gnss_id
                             );
-                        },
+                            continue;
+                        }
+
+                        let constell = constell.unwrap();
+
+                        let prn = meas.sv_id();
+                        let sv = SV::new(constell, prn);
+                        let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
+
+                        let rawxm = Rawxm::new(t_meas, sv, pr, cp, dop, cno);
+
+                        match obs_tx.try_send(Message::Measurement(rawxm)) {
+                            Ok(_) => {},
+                            Err(e) => {
+                                error!(
+                                    "{}({}) failed to send measurement: {}",
+                                    t_meas.round(cfg_precision),
+                                    sv,
+                                    e
+                                );
+                            },
+                        }
                     }
                 }
             },
@@ -241,7 +256,7 @@ fn consume_device(
 
                 end_of_nav_epoch = true;
 
-                debug!("{} - End of Epoch", t_gpst.round(cfg_precision));
+                trace!("{} - End of Epoch", t_gpst.round(cfg_precision));
 
                 let _ = nav_tx.try_send(Message::EndofEpoch(t_gpst));
             },
@@ -251,9 +266,9 @@ fn consume_device(
                 let (hh, mm, ss) = (pkt.hour(), pkt.min(), pkt.sec());
                 if pkt.valid() > 2 {
                     let t_solution = Epoch::from_gregorian(y, m, d, hh, mm, ss, 0, TimeScale::UTC)
-                        .to_time_scale(cfg_timescale);
+                        .to_time_scale(ubx_settings.timescale);
 
-                    info!(
+                    trace!(
                         "{} - PVT SOLUTION: lat={:.5E}° long={:.5E}°",
                         t_solution.round(cfg_precision),
                         pkt.latitude(),
@@ -273,38 +288,60 @@ fn consume_device(
             PacketRef::NavClock(pkt) => {
                 let clock = pkt.clk_bias();
                 match obs_tx.try_send(Message::Clock(clock)) {
-                    Ok(_) => {
-                        debug!("{}", clock);
-                    },
+                    Ok(_) => {},
                     Err(e) => {
-                        error!("missed clock state: {}", e);
+                        error!(
+                            "{} - failed to send clock state: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
                     },
                 }
             },
 
             PacketRef::InfTest(pkt) => {
                 if let Some(msg) = pkt.message() {
-                    trace!("{}", msg);
+                    trace!(
+                        "{} - received test message {}",
+                        runtime.utc_time().round(cfg_precision),
+                        msg
+                    );
                 }
             },
             PacketRef::InfDebug(pkt) => {
                 if let Some(msg) = pkt.message() {
-                    debug!("{}", msg);
+                    debug!(
+                        "{} - received debug message {}",
+                        runtime.utc_time().round(cfg_precision),
+                        msg
+                    );
                 }
             },
             PacketRef::InfNotice(pkt) => {
                 if let Some(msg) = pkt.message() {
-                    info!("{}", msg);
+                    info!(
+                        "{} - received notification {}",
+                        runtime.utc_time().round(cfg_precision),
+                        msg
+                    );
                 }
             },
             PacketRef::InfError(pkt) => {
                 if let Some(msg) = pkt.message() {
-                    error!("{}", msg);
+                    error!(
+                        "{} - received error notification {}",
+                        runtime.utc_time().round(cfg_precision),
+                        msg
+                    );
                 }
             },
             PacketRef::InfWarning(pkt) => {
                 if let Some(msg) = pkt.message() {
-                    warn!("{}", msg);
+                    warn!(
+                        "{} - received warning message {}",
+                        runtime.utc_time().round(cfg_precision),
+                        msg
+                    );
                 }
             },
             _ => {},
@@ -439,8 +476,8 @@ pub async fn main() {
             &mut nav_tx,
             &mut device,
             &mut buffer,
-            ubx_settings.timescale,
             cfg_precision,
+            &ubx_settings,
         ) {
             Ok(0) => {
                 // in standard mode, this may happen,
