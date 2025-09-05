@@ -3,11 +3,12 @@ use std::{
     io::{BufWriter, Write},
 };
 
-use log::{error, info};
+use log::{debug, error, info};
 
 use rinex::{
+    error::FormattingError,
     navigation::{NavFrame, NavFrameType, NavKey, NavMessageType},
-    prelude::{Epoch, Header, Version},
+    prelude::{Constellation, Epoch, Header, RinexType, Version},
     record::Record,
 };
 
@@ -19,54 +20,59 @@ use crate::{
 };
 
 pub struct Collecter {
-    /// T0: initial deploy time, updated on each file release.
-    t0: Epoch,
+    /// Deploy [Epoch]
+    deploy_epoch: Epoch,
+
+    /// Current [Epoch]
+    epoch: Epoch,
+
+    /// True when Header has been released for this period
+    header_released: bool,
+
+    /// Receiver channel
     rx: Rx<Message>,
+
+    /// Shutdown channel
     shutdown: WatchRx<bool>,
+
+    /// Collection [Settings]
     settings: Settings,
-    header: Header,
-    record: Record,
+
+    /// [UbloxSettings]
     ubx_settings: UbloxSettings,
+
+    /// Custom header comments
+    header_comments: Vec<String>,
+
+    /// Current [FileDescriptor] handle
     fd: Option<BufWriter<FileDescriptor>>,
 }
 
 impl Collecter {
     /// Builds new [Collecter]
     pub fn new(
-        t0: Epoch,
+        epoch: Epoch,
         settings: Settings,
         ublox: UbloxSettings,
         shutdown: WatchRx<bool>,
         rx: Rx<Message>,
     ) -> Self {
-        let version = Version::new(settings.major, 0);
-
-        let mut header = Header::basic_nav().with_version(version);
-
-        if let Some(operator) = &settings.operator {
-            header.observer = Some(operator.clone());
-        }
-
-        if let Some(agency) = &settings.agency {
-            header.agency = Some(agency.to_string());
-        }
-
         Self {
-            t0,
             rx,
             settings,
-            header,
             fd: None,
             shutdown,
             ubx_settings: ublox,
-            record: Record::NavRecord(BTreeMap::new()),
+            epoch: epoch,
+            deploy_epoch: epoch,
+            header_released: false,
+            header_comments: Default::default(),
         }
     }
 
     /// Obtain a new file descriptor
     fn fd(&self) -> FileDescriptor {
-        let t = self.t0;
-        let filename = self.settings.filename(true, t);
+        let filename = self.settings.filename(true, self.epoch);
         FileDescriptor::new(self.settings.gzip, &filename)
     }
 
@@ -74,28 +80,25 @@ impl Collecter {
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg {
-                    Message::EndofEpoch(t) => {
-                        if self.fd.is_none() {
-                            self.release_header();
-                        }
+                    Message::EndofEpoch(t) => {},
 
-                        let fd = self.fd.as_mut().unwrap();
-
-                        match self.record.format(fd, &self.header) {
-                            Ok(_) => {
-                                info!("{} - released new epoch", t);
-                            },
-                            Err(e) => {
-                                error!("{} - RINEX formatting error: {}", t, e);
-                            },
-                        }
-                    },
-
-                    Message::FirmwareVersion(version) => {
-                        self.ubx_settings.firmware = Some(version.to_string());
-                    },
+                    Message::FirmwareVersion(version) => {},
 
                     Message::Ephemeris((epoch, sv, ephemeris)) => {
+                        if !self.header_released {
+                            match self.release_header() {
+                                Ok(_) => {
+                                    debug!("{} - NAV header released", epoch);
+                                },
+                                Err(e) => {
+                                    error!("{} - failed to redact RINEX header: {}", epoch, e);
+                                    return;
+                                },
+                            }
+
+                            self.header_released = true;
+                        }
+
                         let key = NavKey {
                             sv,
                             epoch,
@@ -103,14 +106,18 @@ impl Collecter {
                             frmtype: NavFrameType::Ephemeris,
                         };
 
+                        debug!("{}({}) - new LNAV ephemeris", epoch, sv);
+
                         let frame = NavFrame::EPH(ephemeris);
 
-                        let rec = self
-                            .record
-                            .as_mut_nav()
-                            .expect("internal error: invalid nav setup");
+                        // let rec = self
+                        //     .record
+                        //     .as_mut_nav()
+                        //     .expect("internal error: invalid nav setup");
 
-                        rec.insert(key, frame);
+                        // rec.insert(key, frame);
+
+                        self.epoch = epoch; // update
                     },
 
                     Message::Shutdown => {
@@ -124,18 +131,54 @@ impl Collecter {
         }
     }
 
-    fn release_header(&mut self) {
+    fn build_header(&self) -> Header {
+        let mut header = Header::default();
+
+        // revision
+        header.rinex_type = RinexType::NavigationData;
+        header.version.major = self.settings.major;
+
+        // GNSS
+        if self.ubx_settings.constellations.len() == 1 {
+            header.constellation = Some(self.ubx_settings.constellations[0]);
+        } else {
+            header.constellation = Some(Constellation::Mixed);
+        }
+
+        // real time flow comments
+        for comment in self.header_comments.iter() {
+            header.comments.push(comment.to_string());
+        }
+
+        // user comment
+        if let Some(comment) = &self.settings.header_comment {
+            header.comments.push(comment.to_string());
+        }
+
+        // custom operator
+        if let Some(operator) = &self.settings.operator {
+            header.observer = Some(operator.clone());
+        }
+
+        // custom agency
+        if let Some(agency) = &self.settings.agency {
+            header.agency = Some(agency.clone());
+        }
+
+        header
+    }
+
+    fn release_header(&mut self) -> Result<(), FormattingError> {
         // obtain a file descriptor
         let mut fd = BufWriter::new(self.fd());
 
-        self.header.format(&mut fd).unwrap_or_else(|e| {
-            panic!(
-                "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
-                e
-            )
-        });
+        let header = self.build_header();
 
-        let _ = fd.flush();
+        header.format(&mut fd)?; // must pass
+
+        let _ = fd.flush(); // can fail
         self.fd = Some(fd);
+
+        Ok(())
     }
 }

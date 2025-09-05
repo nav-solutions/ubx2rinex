@@ -73,6 +73,7 @@ fn consume_device(
                 // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
+
             PacketRef::RxmSfrbx(sfrbx) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
@@ -82,33 +83,41 @@ fn consume_device(
 
                     match to_constellation(gnss_id) {
                         Some(constellation) => {
-                            let mut prn = sfrbx.sv_id();
+                            // does not proceeed if we're not interested by this system
+                            if ubx_settings.constellations.contains(&constellation) {
+                                let mut prn = sfrbx.sv_id();
 
-                            if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
-                                prn -= SBAS_PRN_OFFSET;
-                            }
+                                if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                                    prn -= SBAS_PRN_OFFSET;
+                                }
 
-                            let sv = SV::new(constellation, prn);
+                                let sv = SV::new(constellation, prn);
 
-                            match constellation {
-                                Constellation::GPS | Constellation::QZSS => {
-                                    // decode
-                                    if let Some(interpretation) = sfrbx.interpret() {
-                                        runtime.latch_sfrbx(sv, interpretation, cfg_precision);
-                                    } else {
+                                match constellation {
+                                    Constellation::GPS | Constellation::QZSS => {
+                                        // decode
+                                        if let Some(interpretation) = sfrbx.interpret() {
+                                            debug!(
+                                                "{} - decoded {:?}",
+                                                runtime.utc_time().round(cfg_precision),
+                                                interpretation
+                                            );
+                                            runtime.latch_sfrbx(sv, interpretation, cfg_precision);
+                                        } else {
+                                            error!(
+                                                "{} - SFRBX interpretation issue",
+                                                runtime.utc_time().round(cfg_precision)
+                                            );
+                                        }
+                                    },
+                                    c => {
                                         error!(
-                                            "{} - SFRBX interpretation issue",
-                                            runtime.utc_time().round(cfg_precision)
+                                            "{} - {} constellation not handled yet",
+                                            runtime.utc_time().round(cfg_precision),
+                                            c
                                         );
-                                    }
-                                },
-                                c => {
-                                    error!(
-                                        "{} - {} constellation not handled yet",
-                                        runtime.utc_time().round(cfg_precision),
-                                        c
-                                    );
-                                },
+                                    },
+                                }
                             }
                         },
                         None => {
@@ -162,7 +171,8 @@ fn consume_device(
                         let _ = meas.cp_stdev(); // LXX deviation
                         let _ = meas.do_stdev(); // DXX deviation
 
-                        // let freq_id = meas.freq_id();
+                        let freq_id = meas.freq_id();
+
                         let gnss_id = meas.gnss_id();
                         let cno = meas.cno();
 
@@ -179,7 +189,7 @@ fn consume_device(
 
                         let constell = constell.unwrap();
 
-                        // does not process if we're not interested by this system
+                        // does not proceed if we're not interested by this system
                         if ubx_settings.constellations.contains(&constell) {
                             let mut prn = meas.sv_id();
 
@@ -571,7 +581,17 @@ pub async fn main() {
                     let (epoch, rinex) = validated.to_rinex();
 
                     // redact message
-                    let _ = nav_tx.send(Message::Ephemeris((epoch, *sv, rinex)));
+                    match nav_tx.try_send(Message::Ephemeris((epoch, *sv, rinex))) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            error!(
+                                "{}({}) failed to send collected ephemeris: {}",
+                                epoch.round(cfg_precision),
+                                sv,
+                                e
+                            );
+                        },
+                    }
                 }
             }
         }
