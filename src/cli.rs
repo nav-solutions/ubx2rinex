@@ -126,8 +126,8 @@ impl Cli {
                             .short('m')
                             .long("model")
                             .required(false)
-                            .value_name("Model")
-                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
+                            .value_name("Receiver model/name/label")
+                            .help("Define the name or label of this receiver. Customizes your RINEX content. For example \"M8T\" when using an undefined M8-T device.")
                     )
                     .next_help_heading("File interface (Passive mode)")
                     .arg(
@@ -165,21 +165,23 @@ When not defined, the default value is \"UBXR\".")
                             .short('p')
                             .action(ArgAction::Set)
                             .required(false)
-                            .help("Define snapshot (=collection) mode")
+                            .help("Define snapshot (=collection) period.
+The snapshot period defines how often a new RINEX file is released.
+")
                     )
                     .arg(
                         Arg::new("v2")
                             .long("v2")
                             .action(ArgAction::SetTrue)
                             .help("Downgrade RINEX revision to V2. You can also upgrade to RINEX V4 with --v4.
-We use V3 by default, because very few tools support V4, so we remain compatible.")
+We use V3 by default, because very few tools support V4 properly to this day.")
                     )
                     .arg(
                         Arg::new("v4")
                             .long("v4")
                             .action(ArgAction::SetTrue)
                             .help("Upgrade RINEX revision to V4. You can also downgrade to RINEX V2 with --v2.
-We use V3 by default, because very few tools support V4, so we remain compatible.")
+We use V3 by default, because very few tools support V4 properly to this day.")
                     )
                     .arg(
                         Arg::new("long")
