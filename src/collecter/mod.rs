@@ -17,6 +17,9 @@ pub enum Message {
     /// [Message::Shutdown] catches Ctrl+C interruptions
     Shutdown,
 
+    /// Custom header comment (specifically)
+    HeaderComment(String),
+
     /// [Message::EndofEpoch] notification
     EndofEpoch(Epoch),
 

@@ -7,10 +7,11 @@ use std::{
 
 use rinex::{
     error::FormattingError,
+    hardware::{Antenna, Receiver},
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Epoch, Header, Observable, RinexType, CRINEX,
+        Constellation, Epoch, Header, Observable, RinexType, CRINEX,
     },
 };
 
@@ -50,6 +51,9 @@ pub struct Collecter {
 
     /// Current [FileDescriptor] handle
     fd: Option<BufWriter<FileDescriptor>>,
+
+    /// List of header comments
+    header_comments: Vec<String>,
 }
 
 impl Collecter {
@@ -64,12 +68,13 @@ impl Collecter {
             rx,
             shutdown,
             settings,
-            fd: None,
-            deploy_epoch: None,
-            epoch: None,
-            header: None,
             ubx_settings: ublox,
+            fd: Default::default(),
+            deploy_epoch: Default::default(),
+            epoch: Default::default(),
+            header: Default::default(),
             buf: Observations::default(),
+            header_comments: Default::default(),
         }
     }
 
@@ -82,11 +87,24 @@ impl Collecter {
     pub async fn run(&mut self) {
         let cfg_precision = Duration::from_seconds(1.0);
 
-        // TODO: improve observables definition & handling..
+        // TODO: These value may differ depending on the
+        // signal band and constellation.. will not be 100% correct..
         let c1c = if self.settings.major == 3 {
             Observable::from_str("C1C").unwrap()
         } else {
             Observable::from_str("C1").unwrap()
+        };
+
+        let c2c = if self.settings.major == 3 {
+            Observable::from_str("C2C").unwrap()
+        } else {
+            Observable::from_str("C2").unwrap()
+        };
+
+        let c5c = if self.settings.major == 3 {
+            Observable::from_str("C5C").unwrap()
+        } else {
+            Observable::from_str("C5").unwrap()
         };
 
         let l1c = if self.settings.major == 3 {
@@ -95,10 +113,34 @@ impl Collecter {
             Observable::from_str("L1").unwrap()
         };
 
+        let l2c = if self.settings.major == 3 {
+            Observable::from_str("L2C").unwrap()
+        } else {
+            Observable::from_str("L2").unwrap()
+        };
+
+        let l5c = if self.settings.major == 3 {
+            Observable::from_str("L5C").unwrap()
+        } else {
+            Observable::from_str("L5").unwrap()
+        };
+
         let d1c = if self.settings.major == 3 {
             Observable::from_str("D1C").unwrap()
         } else {
             Observable::from_str("D1").unwrap()
+        };
+
+        let d2c = if self.settings.major == 3 {
+            Observable::from_str("D2C").unwrap()
+        } else {
+            Observable::from_str("D2").unwrap()
+        };
+
+        let d5c = if self.settings.major == 3 {
+            Observable::from_str("D5C").unwrap()
+        } else {
+            Observable::from_str("D5").unwrap()
         };
 
         loop {
@@ -114,6 +156,12 @@ impl Collecter {
                         }
 
                         return; // abort
+                    },
+
+                    Message::HeaderComment(comment) => {
+                        if self.header_comments.len() < 16 {
+                            self.header_comments.push(comment);
+                        }
                     },
 
                     Message::Clock(clock) => {
@@ -212,9 +260,9 @@ impl Collecter {
 
         let header = self.build_header();
 
-        header.format(&mut fd)?;
+        header.format(&mut fd)?; // must pass
 
-        let _ = fd.flush();
+        let _ = fd.flush(); // can fail
 
         self.fd = Some(fd);
         self.header = Some(header.obs.unwrap().clone());
@@ -256,6 +304,7 @@ impl Collecter {
                     "{} - internal error: failed to release pending epoch",
                     epoch
                 );
+
                 error!("{} - internal error: incomplete RINEX header", epoch);
             },
         }
@@ -264,11 +313,23 @@ impl Collecter {
     fn build_header(&self) -> Header {
         let mut header = Header::default();
 
-        header.rinex_type = RinexType::ObservationData;
-        header.version.major = self.settings.major;
+        let mut antenna = Option::<Antenna>::None;
+        let mut receiver = Option::<Receiver>::None;
 
         let mut obs_header = ObsHeader::default();
 
+        // revision
+        header.rinex_type = RinexType::ObservationData;
+        header.version.major = self.settings.major;
+
+        // GNSS
+        if self.ubx_settings.constellations.len() == 1 {
+            header.constellation = Some(self.ubx_settings.constellations[0]);
+        } else {
+            header.constellation = Some(Constellation::Mixed);
+        }
+
+        // CRINEX
         if self.settings.crinex {
             let mut crinex = CRINEX::default();
 
@@ -281,17 +342,53 @@ impl Collecter {
             obs_header.crinex = Some(crinex);
         }
 
+        // real time flow comments
+        for comment in self.header_comments.iter() {
+            header.comments.push(comment.to_string());
+        }
+
+        // user comment
+        if let Some(comment) = &self.settings.header_comment {
+            header.comments.push(comment.to_string());
+        }
+
+        // custom operator
         if let Some(operator) = &self.settings.operator {
             header.observer = Some(operator.clone());
         }
 
+        // custom agency
         if let Some(agency) = &self.settings.agency {
             header.agency = Some(agency.clone());
         }
 
-        obs_header.codes = self.settings.observables.clone();
+        // custom receiver
+        if let Some(model) = &self.ubx_settings.model {
+            if let Some(receiver) = &mut receiver {
+                *receiver = receiver.with_model(model);
+            } else {
+                receiver = Some(Receiver::default().with_model(model));
+            }
+        }
 
-        println!("CODES: {:?}", obs_header.codes);
+        if let Some(firmware) = &self.ubx_settings.firmware {
+            if let Some(receiver) = &mut receiver {
+                *receiver = receiver.with_firmware(firmware);
+            } else {
+                receiver = Some(Receiver::default().with_firmware(firmware));
+            }
+        }
+
+        header.rcvr = receiver;
+
+        // custom antenna
+        if let Some(model) = &self.ubx_settings.antenna {
+            antenna = Some(Antenna::default().with_model(model));
+        }
+
+        header.rcvr_antenna = antenna;
+
+        obs_header.codes = self.settings.observables.clone();
 
         header.obs = Some(obs_header);
         header

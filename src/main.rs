@@ -18,6 +18,8 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
+use itertools::Itertools;
+
 use env_logger::{Builder, Target};
 
 use log::{debug, error, info, trace, warn};
@@ -52,6 +54,8 @@ use crate::{
     utils::to_constellation,
 };
 
+const SBAS_PRN_OFFSET: u8 = 100;
+
 fn consume_device(
     runtime: &mut Runtime,
     obs_tx: &mut mpsc::Sender<Message>,
@@ -70,47 +74,58 @@ fn consume_device(
                 // let _dyn_model = pkt.dyn_model();
             },
             PacketRef::RxmSfrbx(sfrbx) => {
-                let gnss_id = sfrbx.gnss_id();
+                // Do not process if user is not interested in this channel.
+                // When attached to hardware this naturally never happens.
+                // But this may arise in passive mode.
+                if ubx_settings.ephemeris {
+                    let gnss_id = sfrbx.gnss_id();
 
-                match to_constellation(gnss_id) {
-                    Some(constellation) => {
-                        let sv = SV::new(constellation, sfrbx.sv_id());
+                    match to_constellation(gnss_id) {
+                        Some(constellation) => {
+                            let mut prn = sfrbx.sv_id();
 
-                        match constellation {
-                            Constellation::GPS | Constellation::QZSS => {
-                                // decode
-                                if let Some(interpretation) = sfrbx.interpret() {
-                                    runtime.latch_sfrbx(sv, interpretation, cfg_precision);
-                                } else {
+                            if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                                prn -= SBAS_PRN_OFFSET;
+                            }
+
+                            let sv = SV::new(constellation, prn);
+
+                            match constellation {
+                                Constellation::GPS | Constellation::QZSS => {
+                                    // decode
+                                    if let Some(interpretation) = sfrbx.interpret() {
+                                        runtime.latch_sfrbx(sv, interpretation, cfg_precision);
+                                    } else {
+                                        error!(
+                                            "{} - SFRBX interpretation issue",
+                                            runtime.utc_time().round(cfg_precision)
+                                        );
+                                    }
+                                },
+                                c => {
                                     error!(
-                                        "{} - SFRBX interpretation issue",
-                                        runtime.utc_time().round(cfg_precision)
+                                        "{} - {} constellation not handled yet",
+                                        runtime.utc_time().round(cfg_precision),
+                                        c
                                     );
-                                }
-                            },
-                            c => {
-                                error!(
-                                    "{} - {} constellation not handled yet",
-                                    runtime.utc_time().round(cfg_precision),
-                                    c
-                                );
-                            },
-                        }
-                    },
-                    None => {
-                        error!(
-                            "{} - constellation id error #{}",
-                            runtime.utc_time().round(cfg_precision),
-                            gnss_id
-                        );
-                    },
+                                },
+                            }
+                        },
+                        None => {
+                            error!(
+                                "{} - constellation id error #{}",
+                                runtime.utc_time().round(cfg_precision),
+                                gnss_id
+                            );
+                        },
+                    }
                 }
             },
 
             PacketRef::RxmRawx(pkt) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
-                // But in passive mode it does not.
+                // But this may arise in passive mode.
                 if ubx_settings.rawxm {
                     let gpst_tow_nanos = (pkt.rcv_tow() * 1.0E9).round() as u64;
 
@@ -140,13 +155,12 @@ fn consume_device(
 
                     for meas in pkt.measurements() {
                         let pr = meas.pr_mes();
-                        let _pr_stddev = meas.pr_stdev();
-
                         let cp = meas.cp_mes();
-                        let _cp_stddev = meas.cp_stdev();
-
                         let dop = meas.do_mes();
-                        let _dop_stddev = meas.do_stdev();
+
+                        let _ = meas.pr_stdev(); // CXX deviation
+                        let _ = meas.cp_stdev(); // LXX deviation
+                        let _ = meas.do_stdev(); // DXX deviation
 
                         // let freq_id = meas.freq_id();
                         let gnss_id = meas.gnss_id();
@@ -167,7 +181,12 @@ fn consume_device(
 
                         // does not process if we're not interested by this system
                         if ubx_settings.constellations.contains(&constell) {
-                            let prn = meas.sv_id();
+                            let mut prn = meas.sv_id();
+
+                            if constell.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                                prn -= SBAS_PRN_OFFSET;
+                            };
+
                             let sv = SV::new(constell, prn);
                             let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
 
@@ -188,8 +207,52 @@ fn consume_device(
                     }
                 }
             },
-            PacketRef::MonHw(_pkt) => {
-                // TODO customize RINEX header
+            PacketRef::MonVer(mon_version) => {
+                let software_version = mon_version.software_version().to_string();
+
+                match obs_tx.try_send(Message::FirmwareVersion(software_version)) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!(
+                            "{} - failed to send firmware version: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
+                    },
+                }
+
+                let comment = format!("UBlox hardware version: {}", mon_version.hardware_version());
+
+                match obs_tx.try_send(Message::HeaderComment(comment)) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!(
+                            "{} - failed to send hardware version: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
+                    },
+                }
+
+                let comment = format!("UBlox protocol: {}", mon_version.extension().join(","));
+
+                match obs_tx.try_send(Message::HeaderComment(comment)) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!(
+                            "{} - failed to send ublox proto version: {}",
+                            runtime.utc_time().round(cfg_precision),
+                            e
+                        );
+                    },
+                }
+            },
+            PacketRef::MonHw(mon_hardware) => {
+                // TODO: contributes to hardware events
+                let _ = mon_hardware.a_status();
+
+                // TODO: contributes to hardware events
+                let _ = mon_hardware.a_power();
             },
             PacketRef::NavSat(pkt) => {
                 for sv in pkt.svs() {
@@ -206,10 +269,13 @@ fn consume_device(
                     let _pr_res = sv.pr_res();
                     let _flags = sv.flags();
 
-                    let _sv = SV {
-                        constellation,
-                        prn: sv.sv_id(),
-                    };
+                    let mut prn = sv.sv_id();
+
+                    if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                        prn -= SBAS_PRN_OFFSET;
+                    }
+
+                    let sv = SV::new(constellation, prn);
 
                     // flags.sv_used()
                     //flags.health();
@@ -276,24 +342,27 @@ fn consume_device(
             },
 
             PacketRef::MgaGpsEph(_) | PacketRef::MgaGloEph(_) => {
-                // MGA-EPH downlink
+                // MGA-EPH uplink
             },
 
             PacketRef::MgaGpsIono(_) => {
-                // MGA-IONO downlink
+                // MGA-IONO
             },
 
             PacketRef::NavClock(pkt) => {
-                let clock = pkt.clk_bias();
-                match obs_tx.try_send(Message::Clock(clock)) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        error!(
-                            "{} - failed to send clock state: {}",
-                            runtime.utc_time().round(cfg_precision),
-                            e
-                        );
-                    },
+                // Do not process if user is not interested in this channel.
+                if ubx_settings.rawxm && ubx_settings.rx_clock {
+                    let clock = pkt.clk_bias();
+                    match obs_tx.try_send(Message::Clock(clock)) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            error!(
+                                "{} - failed to send clock state: {}",
+                                runtime.utc_time().round(cfg_precision),
+                                e
+                            );
+                        },
+                    }
                 }
             },
 
@@ -412,7 +481,7 @@ pub async fn main() {
     let (shutdown_tx, shutdown_rx) = watch::channel(true);
 
     // Observation RINEX
-    let (mut obs_tx, obs_rx) = mpsc::channel(32);
+    let (mut obs_tx, obs_rx) = mpsc::channel(128);
 
     let mut obs_collecter = ObsCollecter::new(
         settings.clone(),
@@ -422,7 +491,7 @@ pub async fn main() {
     );
 
     // Navigation RINEX
-    let (mut nav_tx, nav_rx) = mpsc::channel(32);
+    let (mut nav_tx, nav_rx) = mpsc::channel(128);
 
     let mut nav_collecter = NavCollecter::new(
         t_utc,

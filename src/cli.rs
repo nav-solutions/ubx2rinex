@@ -126,9 +126,17 @@ impl Cli {
                             .short('m')
                             .long("model")
                             .required(false)
-                            .value_name("Model")
-                            .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
+                            .value_name("Receiver model/name/label")
+                            .help("Define the name or label of this receiver. Customizes your RINEX content. For example \"M8T\" when using an undefined M8-T device.")
                     )
+                    .arg(
+                        Arg::new("antenna")
+                            .short('a')
+                            .long("antenna")
+                            .required(false)
+                            .value_name("Receiver antenna model/name/label")
+                            .help("Define the name or label of antenna attached to this receiver.
+Customizes your RINEX content."))
                     .next_help_heading("File interface (Passive mode)")
                     .arg(
                         Arg::new("file")
@@ -165,21 +173,23 @@ When not defined, the default value is \"UBXR\".")
                             .short('p')
                             .action(ArgAction::Set)
                             .required(false)
-                            .help("Define snapshot (=collection) mode")
+                            .help("Define snapshot (=collection) period.
+The snapshot period defines how often a new RINEX file is released.
+")
                     )
                     .arg(
                         Arg::new("v2")
                             .long("v2")
                             .action(ArgAction::SetTrue)
                             .help("Downgrade RINEX revision to V2. You can also upgrade to RINEX V4 with --v4.
-We use V3 by default, because very few tools support V4, so we remain compatible.")
+We use V3 by default, because very few tools support V4 properly to this day.")
                     )
                     .arg(
                         Arg::new("v4")
                             .long("v4")
                             .action(ArgAction::SetTrue)
                             .help("Upgrade RINEX revision to V4. You can also downgrade to RINEX V2 with --v2.
-We use V3 by default, because very few tools support V4, so we remain compatible.")
+We use V3 by default, because very few tools support V4 properly to this day.")
                     )
                     .arg(
                         Arg::new("long")
@@ -214,6 +224,13 @@ We use V3 by default, because very few tools support V4, so we remain compatible
                             .required(false)
                             .help("Define name of Operator, to be used in all Headers"),
                     )
+                    .arg(
+                        Arg::new("comment")
+                            .long("comment")
+                            .action(ArgAction::Set)
+                            .required(false)
+                            .help("Add one custom comment to your RINEX Header,
+to be wrapped into several lines if it exceeds 60 characters."))
                     .next_help_heading("Observations collection (signal sampling)")
                     .arg(
                         Arg::new("no-obs")
@@ -376,11 +393,11 @@ You can combine this to CRINEX compression for effiency."))
 
     fn observables(&self) -> HashMap<Constellation, Vec<Observable>> {
         let v2 = self.matches.get_flag("v2");
-        let mut ret = HashMap::new();
+        let mut ret = HashMap::<Constellation, Vec<Observable>>::new();
 
         for constell in self.constellations().iter() {
             if self.l1() {
-                let mut values = match constell {
+                let mut observables = match constell {
                     Constellation::GPS
                     | Constellation::Glonass
                     | Constellation::Galileo
@@ -407,21 +424,26 @@ You can combine this to CRINEX compression for effiency."))
                 };
 
                 if self.no_dop() {
-                    values.retain(|code| !code.is_doppler_observable());
+                    observables.retain(|code| !code.is_doppler_observable());
                 }
                 if self.no_phase() {
-                    values.retain(|code| !code.is_phase_range_observable());
+                    observables.retain(|code| !code.is_phase_range_observable());
                 }
                 if self.no_pr() {
-                    values.retain(|code| !code.is_pseudo_range_observable());
+                    observables.retain(|code| !code.is_pseudo_range_observable());
                 }
-                if !values.is_empty() {
-                    ret.insert(*constell, values);
+
+                for observable in observables.iter() {
+                    if let Some(observables) = ret.get_mut(constell) {
+                        observables.push(observable.clone());
+                    } else {
+                        ret.insert(*constell, vec![observable.clone()]);
+                    }
                 }
             }
 
             if self.l2() {
-                let mut values = match constell {
+                let mut observables = match constell {
                     Constellation::GPS
                     | Constellation::SBAS
                     | Constellation::BeiDou
@@ -447,21 +469,26 @@ You can combine this to CRINEX compression for effiency."))
                 };
 
                 if self.no_dop() {
-                    values.retain(|code| !code.is_doppler_observable());
+                    observables.retain(|code| !code.is_doppler_observable());
                 }
                 if self.no_phase() {
-                    values.retain(|code| !code.is_phase_range_observable());
+                    observables.retain(|code| !code.is_phase_range_observable());
                 }
                 if self.no_pr() {
-                    values.retain(|code| !code.is_pseudo_range_observable());
+                    observables.retain(|code| !code.is_pseudo_range_observable());
                 }
-                if !values.is_empty() {
-                    ret.insert(*constell, values);
+
+                for observable in observables.iter() {
+                    if let Some(observables) = ret.get_mut(constell) {
+                        observables.push(observable.clone());
+                    } else {
+                        ret.insert(*constell, vec![observable.clone()]);
+                    }
                 }
             }
 
             if self.l5() {
-                let mut values = match constell {
+                let mut observables = match constell {
                     Constellation::GPS
                     | Constellation::SBAS
                     | Constellation::Galileo
@@ -486,16 +513,21 @@ You can combine this to CRINEX compression for effiency."))
                 };
 
                 if self.no_dop() {
-                    values.retain(|code| !code.is_doppler_observable());
+                    observables.retain(|code| !code.is_doppler_observable());
                 }
                 if self.no_phase() {
-                    values.retain(|code| !code.is_phase_range_observable());
+                    observables.retain(|code| !code.is_phase_range_observable());
                 }
                 if self.no_pr() {
-                    values.retain(|code| !code.is_pseudo_range_observable());
+                    observables.retain(|code| !code.is_pseudo_range_observable());
                 }
-                if !values.is_empty() {
-                    ret.insert(*constell, values);
+
+                for observable in observables.iter() {
+                    if let Some(observables) = ret.get_mut(constell) {
+                        observables.push(observable.clone());
+                    } else {
+                        ret.insert(*constell, vec![observable.clone()]);
+                    }
                 }
             }
         }
@@ -559,6 +591,11 @@ You can combine this to CRINEX compression for effiency."))
             } else {
                 None
             },
+            antenna: if let Some(antenna) = self.matches.get_one::<String>("antenna") {
+                Some(antenna.to_string())
+            } else {
+                None
+            },
         }
     }
 
@@ -575,6 +612,11 @@ You can combine this to CRINEX compression for effiency."))
                 2
             } else {
                 3
+            },
+            header_comment: if let Some(comment) = self.matches.get_one::<String>("comment") {
+                Some(comment.to_string())
+            } else {
+                None
             },
             country: if let Some(country) = self.matches.get_one::<String>("country") {
                 country.to_string()
