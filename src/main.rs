@@ -508,19 +508,9 @@ pub async fn main() {
         }
 
         if device.interface.is_read_only() {
-            // In passe move, we're detached from hardware and the threads
-            // channels capacity are the actual throttle
-
-            // channels are the actual throttle
-            if ubx_settings.rawxm {
-                obs_tx.reserve().await.unwrap();
-            }
-
-            if ubx_settings.ephemeris {
-                nav_tx.reserve().await.unwrap();
-            }
-
-            // Add a little bit of dead-time to reduce pressure on the data channel.
+            // In passive mode, there is not hardware acting as a throttle, 
+            // the channel capacity becomes the limit.
+            // Adds a little bit of dead-time to reduce pressure on the data channel.
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
     }
