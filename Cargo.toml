@@ -1,6 +1,6 @@
 [package]
 name = "ubx2rinex"
-version = "0.1.0"
+version = "0.2.0"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "U-Blox to RINEX deserializer"
