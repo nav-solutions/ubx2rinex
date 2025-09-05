@@ -16,6 +16,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    
+    - uses: actions-rs/cargo@v1
+      name: Linter 
+      with:
+        command: fmt
+        args: --all -- --check
+    
+    - uses: actions-rs/toolchain@v1
+      name: Install Rust
+      with:
+        toolchain: 1.82.0
+        override: true
+
     - name: Install dependencies
       run: |
         sudo apt-get update 
@@ -23,6 +36,3 @@ jobs:
 
     - name: Build (Default)
       run: cargo build
-    
-    - name: Coding style
-      run: cargo fmt --all -- --check

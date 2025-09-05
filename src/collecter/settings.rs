@@ -22,8 +22,11 @@ pub struct Settings {
     pub prefix: Option<String>,
     pub agency: Option<String>,
     pub operator: Option<String>,
+
     /// Timescale to be used in Observations
     pub timescale: TimeScale,
+
+    /// Observables per system
     pub observables: HashMap<Constellation, Vec<Observable>>,
 }
 

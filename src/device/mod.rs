@@ -1,25 +1,28 @@
-use ublox::{
-    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MgaGloEph, MgaGpsEph, MonVer, NavClock, NavEoe,
-    NavPvt, NavSat, OutProtoMask, PacketRef, Parity, Parser, RxmRawx, StopBits, UartMode,
-    UartPortId, UbxPacketMeta, UbxPacketRequest,
-};
-
-use std::io::Write;
-
-use serialport::SerialPort;
-use std::time::Duration;
-
-use crate::utils::from_timescale;
-
 use log::{debug, error};
 
-use crate::{collecter::Message, UbloxSettings};
+use ublox::{
+    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
+    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
+    OutProtoMask, PacketRef, Parity, Parser, RxmRawx, RxmSfrbx, StopBits, UartMode, UartPortId,
+    UbxPacketMeta, UbxPacketRequest,
+};
+
+mod interface;
+
+use interface::Interface;
+
+use std::{
+    fs::File,
+    io::{ErrorKind, Read, Write},
+    time::Duration,
+};
+
+use crate::{collecter::Message, utils::from_timescale, UbloxSettings};
 
 use tokio::sync::mpsc::Sender;
 
 pub struct Device {
-    pub port: Box<dyn SerialPort>,
+    pub interface: Interface,
     pub parser: Parser<Vec<u8>>,
 }
 
@@ -36,7 +39,9 @@ impl Device {
         self.enable_nav_eoe(buf);
         self.enable_nav_pvt(buf);
         self.enable_nav_sat(buf);
-        self.enable_obs_rinex(buf);
+
+        self.enable_obs_rinex(settings.rawxm, buf);
+        self.enable_rxm_sfrbx(settings.ephemeris, buf);
 
         let time_ref = from_timescale(settings.timescale);
 
@@ -49,19 +54,36 @@ impl Device {
             .unwrap_or_else(|e| panic!("Failed to apply RAM config: {}", e));
     }
 
-    pub fn open(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {
+    pub fn open_file(fullpath: &str) -> Self {
+        let handle = File::open(fullpath).unwrap_or_else(|e| {
+            panic!("Failed to open {}: {}", fullpath, e);
+        });
+
+        Self {
+            parser: Default::default(),
+            interface: if fullpath.ends_with(".gz") {
+                Interface::from_gzip_file_handle(handle)
+            } else {
+                Interface::from_file_handle(handle)
+            },
+        }
+    }
+
+    pub fn open_serial_port(port_str: &str, baud: u32, buffer: &mut [u8]) -> Self {
         // open port
         let port = serialport::new(port_str, baud)
             .timeout(Duration::from_millis(250))
             .open()
             .unwrap_or_else(|e| panic!("Failed to open {} port: {}", port_str, e));
 
-        let parser = Parser::default();
-        let mut dev = Self { port, parser };
+        let mut device = Self {
+            parser: Default::default(),
+            interface: Interface::from_serial_port(port),
+        };
 
         for portid in [UartPortId::Uart1, UartPortId::Uart2] {
             // Enable UBX protocol on selected UART port
-            dev
+            device
             .write_all(
                     &CfgPrtUartBuilder {
                         portid,
@@ -83,15 +105,18 @@ impl Device {
                     )
                 });
 
-            dev.wait_for_ack::<CfgPrtUart>(buffer).unwrap_or_else(|e| {
-                panic!("CFG-MSG-UART NACK: {}", e);
-            });
+            device
+                .wait_for_ack::<CfgPrtUart>(buffer)
+                .unwrap_or_else(|e| {
+                    panic!("CFG-MSG-UART NACK: {}", e);
+                });
         }
-        dev
+
+        device
     }
 
     pub fn write_all(&mut self, data: &[u8]) -> std::io::Result<()> {
-        self.port.write_all(data)
+        self.interface.write_all(data)
     }
 
     // pub fn read_until_timeout(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
@@ -99,36 +124,45 @@ impl Device {
     //     Ok(size)
     // }
 
+    /// Consume all potential UBX packets.
+    ///
+    /// ## Returns
+    /// - Ok(0) once all packets were consumed (no packet present)
+    /// - Ok(n) with n=number of packets that were consumed (not bytes)
+    /// - Err(e) on I/O error
     pub fn consume_all_cb<T: FnMut(PacketRef)>(
         &mut self,
         buffer: &mut [u8],
         mut cb: T,
-    ) -> std::io::Result<()> {
+    ) -> std::io::Result<usize> {
+        let mut total = 0;
+
         loop {
-            let nbytes = self.read_port(buffer)?;
+            let nbytes = self.read_interface(buffer)?;
             if nbytes == 0 {
-                break;
+                return Ok(0);
             }
 
             // parser.consume adds the buffer to its internal buffer, and
             // returns an iterator-like object we can use to process the packets
             let mut it = self.parser.consume_ubx(&buffer[..nbytes]);
+
             loop {
                 match it.next() {
                     Some(Ok(packet)) => {
                         cb(packet);
+                        total += 1;
                     },
                     Some(Err(e)) => {
-                        error!("parsing error: {}", e);
+                        error!("UBX parsing error: {}", e);
                     },
                     None => {
-                        // We've eaten all the packets we have
-                        break;
+                        // consumed all packets
+                        return Ok(total);
                     },
                 }
             }
         }
-        Ok(())
     }
 
     pub fn wait_for_ack<T: UbxPacketMeta>(&mut self, buffer: &mut [u8]) -> std::io::Result<()> {
@@ -145,27 +179,27 @@ impl Device {
         Ok(())
     }
 
-    pub fn request_mga_gps_eph(&mut self) {
-        match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
-            Ok(_) => {
-                debug!("MGA-GPS-EPH");
-            },
-            Err(e) => {
-                error!("Failed to request MGA-GPS-EPH: {}", e);
-            },
-        }
-    }
+    // pub fn request_mga_gps_eph(&mut self) {
+    //     match self.write_all(&UbxPacketRequest::request_for::<MgaGpsEph>().into_packet_bytes()) {
+    //         Ok(_) => {
+    //             debug!("MGA-GPS-EPH");
+    //         },
+    //         Err(e) => {
+    //             error!("Failed to request MGA-GPS-EPH: {}", e);
+    //         },
+    //     }
+    // }
 
-    pub fn request_mga_glonass_eph(&mut self) {
-        match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
-            Ok(_) => {
-                debug!("MGA-GLO-EPH");
-            },
-            Err(e) => {
-                error!("Failed to request MGA-GLO-EPH: {}", e);
-            },
-        }
-    }
+    // pub fn request_mga_glonass_eph(&mut self) {
+    //     match self.write_all(&UbxPacketRequest::request_for::<MgaGloEph>().into_packet_bytes()) {
+    //         Ok(_) => {
+    //             debug!("MGA-GLO-EPH");
+    //         },
+    //         Err(e) => {
+    //             error!("Failed to request MGA-GLO-EPH: {}", e);
+    //         },
+    //     }
+    // }
 
     pub fn read_version(&mut self, buffer: &mut [u8], tx: Sender<Message>) -> std::io::Result<()> {
         self.write_all(&UbxPacketRequest::request_for::<MonVer>().into_packet_bytes())
@@ -215,14 +249,33 @@ impl Device {
         });
     }
 
-    fn enable_obs_rinex(&mut self, buffer: &mut [u8]) {
-        // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
-        // The other positions are for I2C, SPI, etc. Consult your device manual.
+    fn enable_rxm_sfrbx(&mut self, enable: bool, buffer: &mut [u8]) {
+        let msg = if enable {
+            // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
+            // The other positions are for I2C, SPI, etc. Consult your device manual.
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmSfrbx>([1, 1, 1, 1, 1, 1])
+        } else {
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmSfrbx>([0, 0, 0, 0, 0, 0])
+        };
 
-        self.write_all(
-            &CfgMsgAllPortsBuilder::set_rate_for::<RxmRawx>([1, 1, 1, 1, 1, 1]).into_packet_bytes(),
-        )
-        .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
+        self.write_all(&msg.into_packet_bytes())
+            .unwrap_or_else(|e| panic!("UBX-RXM-SFRBX error: {}", e));
+
+        self.wait_for_ack::<CfgMsgAllPorts>(buffer)
+            .unwrap_or_else(|e| panic!("UBX-RXM-SFRBX error: {}", e));
+    }
+
+    fn enable_obs_rinex(&mut self, enable: bool, buffer: &mut [u8]) {
+        let msg = if enable {
+            // By setting 1 in the array below, we enable the NavPvt message for Uart1, Uart2 and USB
+            // The other positions are for I2C, SPI, etc. Consult your device manual.
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmRawx>([1, 1, 1, 1, 1, 1])
+        } else {
+            CfgMsgAllPortsBuilder::set_rate_for::<RxmRawx>([0, 0, 0, 0, 0, 0])
+        };
+
+        self.write_all(&msg.into_packet_bytes())
+            .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
 
         self.wait_for_ack::<CfgMsgAllPorts>(buffer)
             .unwrap_or_else(|e| panic!("UBX-RXM-RAWX error: {}", e));
@@ -307,12 +360,13 @@ impl Device {
     //     Ok(())
     // }
 
-    /// Reads the serial port, converting timeouts into "no data received"
-    fn read_port(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
-        match self.port.read(output) {
+    /// Reads internal [Interface], converting timeouts into "No Data Received",
+    /// which is most convenient for real-time perpertual hardware application like this one.
+    fn read_interface(&mut self, output: &mut [u8]) -> std::io::Result<usize> {
+        match self.interface.read(output) {
             Ok(b) => Ok(b),
             Err(e) => {
-                if e.kind() == std::io::ErrorKind::TimedOut {
+                if e.kind() == ErrorKind::TimedOut {
                     Ok(0)
                 } else {
                     Err(e)

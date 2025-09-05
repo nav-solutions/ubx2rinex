@@ -21,13 +21,13 @@ impl Cli {
                     .about("U-Blox stream to RINEX collecter")
                     .color(ColorChoice::Always)
                     .arg_required_else_help(true)
-                    .next_help_heading("Serial port")
+                    .next_help_heading("Serial port (Active device, GNSS module)")
                     .arg(
                         Arg::new("port")
                             .short('p')
                             .long("port")
                             .value_name("PORT")
-                            .required(true)
+                            .required_unless_present_any(&["file"])
                             .help("Define serial port. Example /dev/ttyUSB0 on Linux")
                     )
                     .arg(
@@ -44,35 +44,42 @@ impl Cli {
                             .long("gps")
                             .action(ArgAction::SetTrue)
                             .help("Activate GPS constellation")
-                            .required_unless_present_any(["galileo", "beidou", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
                             .help("Activate Galileo constellation")
-                            .required_unless_present_any(["gps", "beidou", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
                             .help("Activate BDS (BeiDou) constellation")
-                            .required_unless_present_any(["galileo", "gps", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
                             .help("Activate QZSS constellation")
-                            .required_unless_present_any(["galileo", "gps", "bds", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
                             .help("Activate Glonass constellation")
-                            .required_unless_present_any(["galileo", "gps", "bds", "qzss"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "sbas"]),
+                    )
+                    .arg(
+                        Arg::new("sbas")
+                            .long("sbas")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate SBAS augmentation")
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass"]),
                     )
                     .next_help_heading("Signal selection - at least one required!")
                     .arg(
@@ -80,21 +87,21 @@ impl Cli {
                             .long("l1")
                             .action(ArgAction::SetTrue)
                             .help("Activate L1 signal for all constellations")
-                            .required_unless_present_any(["l2", "l5"]),
+                            .required_unless_present_any(["file", "l2", "l5"]),
                     )
                     .arg(
                         Arg::new("l2")
                             .long("l2")
                             .action(ArgAction::SetTrue)
                             .help("Activate L2 signal for all constellations")
-                            .required_unless_present_any(["l1", "l5"]),
+                            .required_unless_present_any(["file", "l1", "l5"]),
                     )
                     .arg(
                         Arg::new("l5")
                             .long("l5")
                             .action(ArgAction::SetTrue)
                             .help("Activate L5 signal for all constellations. Requires F9 or F10 series.")
-                            .required_unless_present_any(["l1", "l2"]),
+                            .required_unless_present_any(["file", "l1", "l2"]),
                     )
                     .next_help_heading("U-Blox configuration")
                     .arg(
@@ -121,6 +128,19 @@ impl Cli {
                             .required(false)
                             .value_name("Model")
                             .help("Define u-Blox receiver model. For example \"u-Blox M8T\"")
+                    )
+                    .next_help_heading("File interface (Passive mode)")
+                    .arg(
+                        Arg::new("file")
+                            .long("file")
+                            .short('f')
+                            .value_name("FILENAME")
+                            .action(ArgAction::Append)
+                            .required_unless_present_any(&["port"])
+                            .help("Load a single file. You can load as many as needed.
+Each file descriptor is consumed one after the other (no priority). To obtain valid results,
+you might have to load them in correct chronological order (sampling order).
+Gzip compressed UBX files are natively supported but they must be terminated with '.gz'")
                     )
                     .next_help_heading("RINEX Collection")
                     .arg(
@@ -243,7 +263,8 @@ Default value is GPST."
                         Arg::new("gzip")
                             .long("gzip")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Gzip compression."))
+                            .help("Gzip compress the RINEX output.
+You can combine this to CRINEX compression for effiency."))
                     .next_help_heading("Navigation messages collection")
                             .arg(
                                 Arg::new("nav")
@@ -252,19 +273,23 @@ Default value is GPST."
                                     .action(ArgAction::SetTrue)
                                     .help("Activate Navigation messages collection, which is not enabled by default.")
                             )
-                            .arg(
-                                Arg::new("gzip")
-                                    .long("gzip")
-                                    .action(ArgAction::SetTrue)
-                                    .help("Activate Gzip compression."))
                     .get_matches()
             },
         }
     }
 
     /// Returns User serial port specification
-    pub fn port(&self) -> &str {
-        self.matches.get_one::<String>("port").unwrap()
+    pub fn serial_port(&self) -> Option<&String> {
+        self.matches.get_one::<String>("port")
+    }
+
+    /// Input file paths
+    pub fn filepaths(&self) -> Vec<&String> {
+        if let Some(fp) = self.matches.get_many::<String>("file") {
+            fp.collect()
+        } else {
+            Vec::new()
+        }
     }
 
     /// Returns User baud rate specification
@@ -296,6 +321,10 @@ Default value is GPST."
         self.matches.get_flag("glonass")
     }
 
+    fn sbas(&self) -> bool {
+        self.matches.get_flag("sbas")
+    }
+
     fn constellations(&self) -> Vec<Constellation> {
         let mut constellations = Vec::<Constellation>::with_capacity(4);
 
@@ -314,6 +343,10 @@ Default value is GPST."
         if self.glonass() {
             constellations.push(Constellation::Glonass);
         }
+        if self.sbas() {
+            constellations.push(Constellation::SBAS);
+        }
+
         constellations
     }
 
@@ -351,6 +384,8 @@ Default value is GPST."
                     Constellation::GPS
                     | Constellation::Glonass
                     | Constellation::Galileo
+                    | Constellation::BeiDou
+                    | Constellation::SBAS
                     | Constellation::QZSS => {
                         if v2 {
                             vec![
@@ -387,7 +422,11 @@ Default value is GPST."
 
             if self.l2() {
                 let mut values = match constell {
-                    Constellation::GPS | Constellation::Glonass | Constellation::QZSS => {
+                    Constellation::GPS
+                    | Constellation::SBAS
+                    | Constellation::BeiDou
+                    | Constellation::Glonass
+                    | Constellation::QZSS => {
                         if v2 {
                             vec![
                                 Observable::from_str("C2").unwrap(),
@@ -423,7 +462,10 @@ Default value is GPST."
 
             if self.l5() {
                 let mut values = match constell {
-                    Constellation::GPS | Constellation::Galileo | Constellation::QZSS => {
+                    Constellation::GPS
+                    | Constellation::SBAS
+                    | Constellation::Galileo
+                    | Constellation::QZSS => {
                         if v2 {
                             vec![
                                 Observable::from_str("C5").unwrap(),

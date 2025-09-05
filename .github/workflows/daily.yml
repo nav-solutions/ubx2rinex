@@ -13,19 +13,12 @@ jobs:
   build:
     name: Build 
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        include:
-          - name: Build (default)
-            opts: -r
-
     steps:
     - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
       name: Install Rust
       with:
-        toolchain: stable
+        toolchain: 1.82.0
         override: true
 
     - name: Install Dependencies
@@ -33,6 +26,8 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libudev-dev
     
-    - name: ${{ matrix.name }} 
-      run: |
-        cargo clean && cargo update && cargo build ${{ matrix.opts }}
+    - uses: actions-rs/cargo@v1
+      name: Build (all features)
+      with:
+        command: build
+        args: --all-features

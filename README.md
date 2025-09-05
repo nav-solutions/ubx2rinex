@@ -5,6 +5,7 @@ UBX2RINEX
 [![Rust](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml/badge.svg)](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml)
 [![crates.io](https://img.shields.io/crates/v/ubx2rinex.svg)](https://crates.io/crates/ubx2rinex)
 
+[![MRSV](https://img.shields.io/badge/MSRV-1.82.0-orange?style=for-the-badge)](https://github.com/rust-lang/rust/releases/tag/1.82.0)
 [![License](https://img.shields.io/badge/license-MPL_2.0-orange?style=for-the-badge&logo=mozilla)](https://github.com/nav-solutions/ubx2rinex/blob/main/LICENSE)
 
 `ubx2rinex` is a small command line utility to deserialize
@@ -14,7 +15,7 @@ a U-Blox data stream into standardized RINEX file(s).
 
 ## Licensing
 
-This application is part of the [RTK-rs framework](https://github.com/nav-solutions) which
+This application is part of the [nav-solutions framework](https://github.com/nav-solutions) which
 is delivered under the [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
 
 ## Install from Cargo
@@ -44,7 +45,29 @@ of modern devices, and does not cause issues with older firmwares, simply restri
 
 ## Getting started
 
-To deploy, you must at least select one Constellation and one signal.  
+This application works from a UBX (U-Blox protocol) stream. It can be managed and
+handled in real-time, when connected to a U-Blox receiver (we call this the active mode),
+or be a UBX snapshot (so called UBX files) that you previously capteured, we call this the passive mode.
+
+Connecting and operating a GNSS module requires more knowledge and involes more options.
+Mostly, to configure the hardware and operate correctly. One example would be the selection
+of the desired Constellation, and navigation signals. You select this mode of operation by
+connecting to a device with `-p,--port` (mandatory).
+
+When operating in passive mode, all hardware related options no longer apply.
+You select this mode of operation by loading at least one file with `-f,--file` (mandatory).
+Passive deployment example:
+
+```bash
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --l1 --gps --bds --galileo
+```
+
+In any case, either `-p,--port` or `-f,--file` is required and they are mutually exclusive:
+you cannot operate in both modes at the same time.
+
+## Connecting to a U-Blox receiver
+
+To deploy in active mode, you must at least select one Constellation and one signal.  
 We propose one flag per constellation, modern UBlox supports tracking of up to 3 constellations.
 We offer one flag per signal.
 
@@ -98,9 +121,26 @@ ubx2rinex -p /dev/ttyUSB1 --gps --glonass --l1
 Any other constellation flags has no effect. Selecting other signals has no effect.
 Removing L1 signal would create invalid RINEX.
 
+## Deserializing UBX files
+
+You can use `UBX2RINEX` to deserialize your UBX snapshots to OBS, NAV and OBS+NAV RINEX files.  
+This mode is selected by loading _at least_ one UBX file into the interface with `-f,--file`.   
+We support `gzip` compressed UBX files as well, but their name must be terminated with `.ubx`.
+
+Deploying `UBX2RINEX` in passive mode:
+
+```bash
+ubx2rinex -f /tmp/snapshot1.ubx -f /tmp/snapshot2.ubx.gz 
+```
+
+Note that constellation and signal selection are no longer required, they no longer apply.
+If you happen to use one of those flags, the application will not crash, it will simply do not generate anything.  
+
+Any options related to data collection still applies to the passive mode.
+
 ## Application logs
 
-`ubx2rinex` uses the Rust logger for tracing events in real-time and not disturb the collection process.  
+`UBX2RINEX` uses the Rust logger for tracing events in real-time and not disturb the collection process.  
 To activate the application logs, simply define the `$RUST_LOG` variable:
 
 ```bash
@@ -230,8 +270,34 @@ ubx2rinex -p /dev/ttyACM0 \
           -s "1 s"
 ```
 
-Snapshot period
-===============
+NAV RINEX Collection
+====================
+
+This tool supports NAV RINEX files collection, it is activated with `--nav`.  
+This is currently limited to GPS and QZSS constellation and ephemeris messages. We hope to unlock Galileo, BDS and Glonass message soon. Note that this mode, because it is very particular, is not activated by default.
+The default mode of operation is Observation RINEX collection.
+
+Note that you can disable OBS RINEX collection with `--no-obs`, this is particularly useful
+if you're only interested in dumping NAV RINEX files.
+
+The selected RINEX revision impacts the navigation file content severaly. This is mostly due
+to the fact the RINEX format was not particularly well designed for navigation frames, until V3+.
+Note that our default revision is _V3_, while we correctly support V4. This is a design choice,
+to make the default revision compatible with most post-processing tools, as very few actually
+accept RINEX V4 correctly. We distinguish two different cases:
+
+- V2, V3(Default): when operating in default revision, or selecting `--v2` specifically,
+the tool redacts a legacy Navigation file, where legacy navigation messages are described.
+The ionosphere and orientation models are daily (24h timeframe) and described in the file header.
+
+- V4: when `--v4` is specifically selected, navigation messages are once again updated regularly,
+more messages are introduced and supported.
+But the ionosphere and orientation models are also updated regularly. This is most suited
+for high precision navigation. Once this tool supports more than ephemeris messages, we can
+take advantage of this.
+
+RINEX Colection: Snapshot period
+================================
 
 The snapshot period defines how often we release a RINEX of each kind.
 When the snapshot is being released, the file handled is released and the file is ready to be distributed or post processed.
@@ -250,8 +316,8 @@ NB:
 - the first signal observation is released everyday at midnight 00:00:00 in the main Timescale
 - the last signal observation is released everyday at 23:59:30 in the main Timescale
 
-File rotation and descriptors
-=============================
+RINEX Collection: file rotation and descriptors
+===============================================
 
 `ubx2rinex` owns the File descriptor with write access (only) until the end of this period.  
 That means you can only read the file until the end of the period.
@@ -272,9 +338,9 @@ Program interruption and release
 Other customizations
 ====================
 
-- Define your name as `Operator`` in RINEX terminology,
+- Define your name as `Operator` in RINEX terminology,
 with `--operator myself`
-- Define your name as `Observer`` in RINEX terminology,
+- Define your name as `Observer` in RINEX terminology,
 with `--observer myself`
 - Define your agency (publisher) with `--agency myagency`
 - Define the country code (3 letter) of your agency with `--country ABC`
@@ -282,8 +348,4 @@ with `--observer myself`
 no-std
 ======
 
-This program relies on both the `ubx` parser and the `rinex` library.  
-The first one supports `no-std`, but it is unfortunately not true for the latter.  
-We will see if we can provide some very reduced, `no-std` compatible portions of the `rinex` library
-in the future, especially the file production side. 
-This is not scheduled work as of today. Feel free to join in if you want to see this happen sooner.
+This application required `std` and there is no plan to make it `no-std` compatible in near future.

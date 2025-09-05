@@ -1,32 +1,44 @@
-use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
+use rinex::prelude::{Constellation, Duration, TimeScale};
 use ublox::{cfg_val::CfgVal, CfgLayerSet, CfgValSetBuilder};
 
 #[derive(Debug, Clone)]
 pub struct Settings {
     /// L1 activated for all constellations
     pub l1: bool,
+
     /// L2 activated for all constellations
     pub l2: bool,
+
     /// L5 activated for all constellations
     pub l5: bool,
+
     /// Timescale we align to
     pub timescale: TimeScale,
+
     /// Sampling [Duration]
     pub sampling_period: Duration,
-    /// Rawxm enable
+
+    /// Rawxm enabled
     pub rawxm: bool,
-    /// Ephemeris enable
+
+    /// Ephemeris enabled
     pub ephemeris: bool,
+
     /// ratio
     pub solutions_ratio: u16,
+
     /// Active [Constellation]s
     pub constellations: Vec<Constellation>,
+
     /// Serial number
     pub sn: Option<String>,
+
     /// RX-clock enabled
     pub rx_clock: bool,
+
     /// RX model
     pub model: Option<String>,
+
     /// Firmware version
     pub firmware: Option<String>,
 }
