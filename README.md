@@ -56,6 +56,11 @@ connecting to a device with `-p,--port` (mandatory).
 
 When operating in passive mode, all hardware related options no longer apply.
 You select this mode of operation by loading at least one file with `-f,--file` (mandatory).
+Passive deployment example:
+
+```bash
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --l1 --gps --bds --galileo
+```
 
 In any case, either `-p,--port` or `-f,--file` is required and they are mutually exclusive:
 you cannot operate in both modes at the same time.
