@@ -298,9 +298,14 @@ impl Collecter {
             obs_header.crinex = Some(crinex);
         }
 
-        // custom comments
-        if !self.header_comments.is_empty() {
-            header.comments = self.header_comments.clone();
+        // real time flow comments
+        for comment in self.header_comments.iter() {
+            header.comments.push(comment.to_string());
+        }
+
+        // user comment
+        if let Some(comment) = &self.settings.header_comment {
+            header.comments.push(comment.to_string());
         }
 
         // custom operator

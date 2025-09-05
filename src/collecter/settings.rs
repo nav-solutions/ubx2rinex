@@ -12,16 +12,34 @@ use rinex::{
 
 #[derive(Debug, Clone)]
 pub struct Settings {
+    /// Release Major version
     pub major: u8,
+
+    /// GZIP compression
     pub gzip: bool,
+    /// CRINEX compression
     pub crinex: bool,
+
+    /// Custom name
     pub name: String,
+    /// Custom country code
     pub country: String,
+    /// Snapshot period
     pub period: Duration,
+    /// Prefers short RINEX file name
     pub short_filename: bool,
+
+    /// Custom file prefix
     pub prefix: Option<String>,
+
+    /// Custom publishing agency
     pub agency: Option<String>,
+
+    /// Custom program operator
     pub operator: Option<String>,
+
+    /// Custom header comment
+    pub header_comment: Option<String>,
 
     /// Timescale to be used in Observations
     pub timescale: TimeScale,

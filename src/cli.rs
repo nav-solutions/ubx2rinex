@@ -224,6 +224,13 @@ We use V3 by default, because very few tools support V4 properly to this day.")
                             .required(false)
                             .help("Define name of Operator, to be used in all Headers"),
                     )
+                    .arg(
+                        Arg::new("comment")
+                            .long("comment")
+                            .action(ArgAction::Set)
+                            .required(false)
+                            .help("Add one custom comment to your RINEX Header,
+to be wrapped into several lines if it exceeds 60 characters."))
                     .next_help_heading("Observations collection (signal sampling)")
                     .arg(
                         Arg::new("no-obs")
@@ -590,6 +597,11 @@ You can combine this to CRINEX compression for effiency."))
                 2
             } else {
                 3
+            },
+            header_comment: if let Some(comment) = self.matches.get_one::<String>("comment") {
+                Some(comment.to_string())
+            } else {
+                None
             },
             country: if let Some(country) = self.matches.get_one::<String>("country") {
                 country.to_string()
