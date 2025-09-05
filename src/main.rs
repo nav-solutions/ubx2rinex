@@ -1,16 +1,18 @@
-#![doc(html_logo_url = "https://raw.githubusercontent.com/rtk-rs/.github/master/logos/logo2.jpg")]
+#![doc(
+    html_logo_url = "https://raw.githubusercontent.com/nav-solutions/.github/master/logos/logo2.jpg"
+)]
 #![doc = include_str!("../README.md")]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::type_complexity)]
 
 /*
- * UBX2RINEX is part of the rtk-rs framework.
+ * UBX2RINEX is part of the nav-solutions framework.
  * Authors: Guillaume W. Bres <guillaume.bressaix@gmail.com> et al,
- * (cf. https://github.com/rtk-rs/rinex/graphs/contributors)
- * (cf. https://github.com/rtk-rs/ubx2rinex/graphs/contributors)
+ * (cf. https://github.com/nav-solutions/rinex/graphs/contributors)
+ * (cf. https://github.com/nav-solutions/ubx2rinex/graphs/contributors)
  * This framework is shipped under Mozilla Public V2 license.
  *
- * Documentation: https://github.com/rtk-rs/ubx2rinex
+ * Documentation: https://github.com/nav-solutions/ubx2rinex
  */
 
 extern crate gnss_rs as gnss;
@@ -60,13 +62,6 @@ fn consume_device(
     ubx_settings: &UbloxSettings,
 ) -> std::io::Result<usize> {
     let mut end_of_nav_epoch = false;
-
-    if device.interface.is_read_only() {
-        // detached from hardware, we don't have the machine rate
-        // acting as a throttle.
-        // Add a little bit of dead-time to reduce pressure on the data channel.
-        std::thread::sleep(std::time::Duration::from_millis(250));
-    }
 
     device.consume_all_cb(buffer, |packet| {
         match packet {
@@ -170,22 +165,25 @@ fn consume_device(
 
                         let constell = constell.unwrap();
 
-                        let prn = meas.sv_id();
-                        let sv = SV::new(constell, prn);
-                        let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
+                        // does not process if we're not interested by this system
+                        if ubx_settings.constellations.contains(&constell) {
+                            let prn = meas.sv_id();
+                            let sv = SV::new(constell, prn);
+                            let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
 
-                        let rawxm = Rawxm::new(t_meas, sv, pr, cp, dop, cno);
+                            let rawxm = Rawxm::new(t_meas, sv, pr, cp, dop, cno);
 
-                        match obs_tx.try_send(Message::Measurement(rawxm)) {
-                            Ok(_) => {},
-                            Err(e) => {
-                                error!(
-                                    "{}({}) failed to send measurement: {}",
-                                    t_meas.round(cfg_precision),
-                                    sv,
-                                    e
-                                );
-                            },
+                            match obs_tx.try_send(Message::Measurement(rawxm)) {
+                                Ok(_) => {},
+                                Err(e) => {
+                                    error!(
+                                        "{}({}) failed to send measurement: {}",
+                                        t_meas.round(cfg_precision),
+                                        sv,
+                                        e
+                                    );
+                                },
+                            }
                         }
                     }
                 }
@@ -507,6 +505,23 @@ pub async fn main() {
                     let _ = nav_tx.send(Message::Ephemeris((epoch, *sv, rinex)));
                 }
             }
+        }
+
+        if device.interface.is_read_only() {
+            // In passe move, we're detached from hardware and the threads
+            // channels capacity are the actual throttle
+
+            // channels are the actual throttle
+            if ubx_settings.rawxm {
+                obs_tx.reserve().await.unwrap();
+            }
+
+            if ubx_settings.ephemeris {
+                nav_tx.reserve().await.unwrap();
+            }
+
+            // Add a little bit of dead-time to reduce pressure on the data channel.
+            std::thread::sleep(std::time::Duration::from_millis(25));
         }
     }
 }

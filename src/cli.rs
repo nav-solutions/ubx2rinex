@@ -44,35 +44,42 @@ impl Cli {
                             .long("gps")
                             .action(ArgAction::SetTrue)
                             .help("Activate GPS constellation")
-                            .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
                             .help("Activate Galileo constellation")
-                            .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
                             .help("Activate BDS (BeiDou) constellation")
-                            .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
                             .help("Activate QZSS constellation")
-                            .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass", "sbas"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
                             .help("Activate Glonass constellation")
-                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "sbas"]),
+                    )
+                    .arg(
+                        Arg::new("sbas")
+                            .long("sbas")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate SBAS augmentation")
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass"]),
                     )
                     .next_help_heading("Signal selection - at least one required!")
                     .arg(
@@ -314,6 +321,10 @@ You can combine this to CRINEX compression for effiency."))
         self.matches.get_flag("glonass")
     }
 
+    fn sbas(&self) -> bool {
+        self.matches.get_flag("sbas")
+    }
+
     fn constellations(&self) -> Vec<Constellation> {
         let mut constellations = Vec::<Constellation>::with_capacity(4);
 
@@ -332,6 +343,10 @@ You can combine this to CRINEX compression for effiency."))
         if self.glonass() {
             constellations.push(Constellation::Glonass);
         }
+        if self.sbas() {
+            constellations.push(Constellation::SBAS);
+        }
+
         constellations
     }
 
@@ -369,6 +384,8 @@ You can combine this to CRINEX compression for effiency."))
                     Constellation::GPS
                     | Constellation::Glonass
                     | Constellation::Galileo
+                    | Constellation::BeiDou
+                    | Constellation::SBAS
                     | Constellation::QZSS => {
                         if v2 {
                             vec![
@@ -405,7 +422,11 @@ You can combine this to CRINEX compression for effiency."))
 
             if self.l2() {
                 let mut values = match constell {
-                    Constellation::GPS | Constellation::Glonass | Constellation::QZSS => {
+                    Constellation::GPS
+                    | Constellation::SBAS
+                    | Constellation::BeiDou
+                    | Constellation::Glonass
+                    | Constellation::QZSS => {
                         if v2 {
                             vec![
                                 Observable::from_str("C2").unwrap(),
@@ -441,7 +462,10 @@ You can combine this to CRINEX compression for effiency."))
 
             if self.l5() {
                 let mut values = match constell {
-                    Constellation::GPS | Constellation::Galileo | Constellation::QZSS => {
+                    Constellation::GPS
+                    | Constellation::SBAS
+                    | Constellation::Galileo
+                    | Constellation::QZSS => {
                         if v2 {
                             vec![
                                 Observable::from_str("C5").unwrap(),

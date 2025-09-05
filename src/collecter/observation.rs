@@ -6,6 +6,7 @@ use std::{
 };
 
 use rinex::{
+    error::FormattingError,
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
@@ -119,7 +120,7 @@ impl Collecter {
                         debug!(
                             "{} - new clock state: {}",
                             self.epoch.unwrap_or_default().round(cfg_precision),
-                            clock
+                            Duration::from_seconds(clock)
                         );
 
                         let bias = clock * 1.0E-3;
@@ -137,7 +138,22 @@ impl Collecter {
 
                         if self.deploy_epoch.is_none() {
                             self.deploy_epoch = Some(rawxm.epoch);
-                            self.release_header();
+                            match self.release_header() {
+                                Ok(_) => {
+                                    debug!(
+                                        "{} - RINEX header redacted",
+                                        self.epoch.unwrap_or_default().round(cfg_precision)
+                                    );
+                                },
+                                Err(e) => {
+                                    error!(
+                                        "{} - failed to redact RINEX header: {}",
+                                        self.epoch.unwrap_or_default().round(cfg_precision),
+                                        e
+                                    );
+                                    return;
+                                },
+                            }
                         }
 
                         if self.epoch.is_none() {
@@ -188,7 +204,7 @@ impl Collecter {
         }
     }
 
-    fn release_header(&mut self) {
+    fn release_header(&mut self) -> Result<(), FormattingError> {
         let deploy_epoch = self.deploy_epoch.unwrap();
 
         // obtain new file, release header
@@ -196,17 +212,14 @@ impl Collecter {
 
         let header = self.build_header();
 
-        header.format(&mut fd).unwrap_or_else(|e| {
-            panic!(
-                "RINEX header formatting: {}. Aborting (avoiding corrupt file)",
-                e
-            )
-        });
+        header.format(&mut fd)?;
 
         let _ = fd.flush();
 
         self.fd = Some(fd);
         self.header = Some(header.obs.unwrap().clone());
+
+        Ok(())
     }
 
     fn release_epoch(&mut self) {
@@ -277,6 +290,8 @@ impl Collecter {
         }
 
         obs_header.codes = self.settings.observables.clone();
+
+        println!("CODES: {:?}", obs_header.codes);
 
         header.obs = Some(obs_header);
         header

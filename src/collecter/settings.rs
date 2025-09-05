@@ -26,6 +26,7 @@ pub struct Settings {
     /// Timescale to be used in Observations
     pub timescale: TimeScale,
 
+    /// Observables per system
     pub observables: HashMap<Constellation, Vec<Observable>>,
 }
 
