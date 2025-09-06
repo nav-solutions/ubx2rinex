@@ -51,7 +51,7 @@ use crate::{
     device::Device,
     runtime::Runtime,
     ubx::Settings as UbloxSettings,
-    utils::{to_constellation, SignalCarrier},
+    utils::to_constellation,
 };
 
 const SBAS_PRN_OFFSET: u8 = 100;
