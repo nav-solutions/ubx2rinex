@@ -13,6 +13,7 @@ use rinex::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
         Constellation, Epoch, Header, Observable, RinexType, CRINEX,
     },
+    hatanaka::Compressor,
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
@@ -55,6 +56,9 @@ pub struct Collecter {
 
     /// List of header comments
     header_comments: Vec<String>,
+
+    /// CRINEX compressor
+    compressor: Compressor,
 }
 
 impl Collecter {
@@ -65,10 +69,15 @@ impl Collecter {
         shutdown: WatchRx<bool>,
         rx: Rx<Message>,
     ) -> Self {
+            
+        let mut compressor = Compressor::default();
+        compressor.v3 = settings.major > 2;
+
         Self {
             rx,
             shutdown,
             settings,
+            compressor,
             ubx_settings: ublox,
             fd: Default::default(),
             deploy_epoch: Default::default(),
