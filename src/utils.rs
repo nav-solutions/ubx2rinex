@@ -71,16 +71,6 @@ impl SignalCarrier {
     pub fn to_pseudo_range_observable(&self, v2: bool) -> String {
         if v2 {
             match self {
-                Self::GPS_L1_CA
-                | Self::SBAS_L1_CA
-                | Self::GAL_E1_C
-                | Self::GAL_E1_B
-                | Self::QZSS_L1_CA
-                | Self::GLO_L1_OF
-                | Self::BDS_B1I_D1
-                | Self::BDS_B1I_D2
-                | Self::BDS_B2I_D1
-                | Self::BDS_B2I_D2 => "C1".to_string(),
                 Self::GPS_L2_CL
                 | Self::GPS_L2_CM
                 | Self::QZSS_L2_CM
@@ -111,11 +101,11 @@ impl SignalCarrier {
                 Self::GAL_E5B_I => "C7I".to_string(),
                 Self::GAL_E5B_Q => "C7Q".to_string(),
                 Self::BDS_B1I_D1 => "C2I".to_string(),
-                Self::BDS_B1I_D2 => "C1D".to_string(),
-                Self::BDS_B2I_D1 => "C5D".to_string(),
-                Self::BDS_B2I_D2 => "C7I".to_string(),
+                Self::BDS_B1I_D2 => "C2D".to_string(),
+                Self::BDS_B2I_D1 => "C7I".to_string(),
+                Self::BDS_B2I_D2 => "C7D".to_string(),
                 Self::BDS_B1C => "C5D".to_string(),
-                Self::BDS_B2A => "C5D".to_string(),
+                Self::BDS_B2A => "C5I".to_string(),
                 Self::QZSS_L1_CA => "C1C".to_string(),
                 Self::QZSS_L1_S => "C1Z".to_string(),
                 Self::QZSS_L2_CM => "C2S".to_string(),
@@ -132,30 +122,20 @@ impl SignalCarrier {
     pub fn to_phase_range_observable(&self, v2: bool) -> String {
         if v2 {
             match self {
-                Self::GPS_L1_CA
-                | Self::SBAS_L1_CA
-                | Self::GAL_E1_C
-                | Self::GAL_E1_B
-                | Self::QZSS_L1_CA
-                | Self::GLO_L1_OF
-                | Self::BDS_B1I_D1
-                | Self::BDS_B1I_D2
-                | Self::BDS_B2I_D1
-                | Self::BDS_B2I_D2 => "C1".to_string(),
                 Self::GPS_L2_CL
                 | Self::GPS_L2_CM
                 | Self::QZSS_L2_CM
                 | Self::QZSS_L2_CL
-                | Self::GLO_L2_OF => "C2".to_string(),
+                | Self::GLO_L2_OF => "L2".to_string(),
                 Self::GPS_L5_I
                 | Self::GPS_L5_Q
                 | Self::GAL_E5A_I
                 | Self::GAL_E5A_Q
                 | Self::QZSS_L5_I
                 | Self::QZSS_L5_Q
-                | Self::NAVIC_L5_A => "C5".to_string(),
-                Self::GAL_E5B_I | Self::GAL_E5B_Q => "C7".to_string(),
-                _ => "C1".to_string(),
+                | Self::NAVIC_L5_A => "L5".to_string(),
+                Self::GAL_E5B_I | Self::GAL_E5B_Q => "L7".to_string(),
+                _ => "L1".to_string(),
             }
         } else {
             match self {
@@ -171,12 +151,12 @@ impl SignalCarrier {
                 Self::GAL_E5A_Q => "L5Q".to_string(),
                 Self::GAL_E5B_I => "L7I".to_string(),
                 Self::GAL_E5B_Q => "L7Q".to_string(),
-                Self::BDS_B1I_D1 => "L1I".to_string(),
-                Self::BDS_B1I_D2 => "L1D".to_string(),
-                Self::BDS_B2I_D1 => "L1C".to_string(),
-                Self::BDS_B2I_D2 => "L1C".to_string(),
-                Self::BDS_B1C => "L1C".to_string(),
-                Self::BDS_B2A => "L5D".to_string(),
+                Self::BDS_B1I_D1 => "L2I".to_string(),
+                Self::BDS_B1I_D2 => "L2D".to_string(),
+                Self::BDS_B2I_D1 => "L7I".to_string(),
+                Self::BDS_B2I_D2 => "L7D".to_string(),
+                Self::BDS_B1C => "L5D".to_string(),
+                Self::BDS_B2A => "L5I".to_string(),
                 Self::QZSS_L1_CA => "L1C".to_string(),
                 Self::QZSS_L1_S => "L1Z".to_string(),
                 Self::QZSS_L2_CM => "L2S".to_string(),
@@ -193,16 +173,6 @@ impl SignalCarrier {
     pub fn to_doppler_observable(&self, v2: bool) -> String {
         if v2 {
             match self {
-                Self::GPS_L1_CA
-                | Self::SBAS_L1_CA
-                | Self::GAL_E1_C
-                | Self::GAL_E1_B
-                | Self::QZSS_L1_CA
-                | Self::GLO_L1_OF
-                | Self::BDS_B1I_D1
-                | Self::BDS_B1I_D2
-                | Self::BDS_B2I_D1
-                | Self::BDS_B2I_D2 => "D1".to_string(),
                 Self::GPS_L2_CL
                 | Self::GPS_L2_CM
                 | Self::QZSS_L2_CM
@@ -232,12 +202,12 @@ impl SignalCarrier {
                 Self::GAL_E5A_Q => "D5Q".to_string(),
                 Self::GAL_E5B_I => "D7I".to_string(),
                 Self::GAL_E5B_Q => "D7Q".to_string(),
-                Self::BDS_B1I_D1 => "D1I".to_string(),
-                Self::BDS_B1I_D2 => "D1D".to_string(),
-                Self::BDS_B2I_D1 => "D1C".to_string(),
-                Self::BDS_B2I_D2 => "D1C".to_string(),
-                Self::BDS_B1C => "D1C".to_string(),
-                Self::BDS_B2A => "D5D".to_string(),
+                Self::BDS_B1I_D1 => "D2I".to_string(),
+                Self::BDS_B1I_D2 => "D2D".to_string(),
+                Self::BDS_B2I_D1 => "D7I".to_string(),
+                Self::BDS_B2I_D2 => "D7D".to_string(),
+                Self::BDS_B1C => "D5D".to_string(),
+                Self::BDS_B2A => "D5I".to_string(),
                 Self::QZSS_L1_CA => "D1C".to_string(),
                 Self::QZSS_L1_S => "D1Z".to_string(),
                 Self::QZSS_L2_CM => "D2S".to_string(),
@@ -254,30 +224,20 @@ impl SignalCarrier {
     pub fn to_ssi_observable(&self, v2: bool) -> String {
         if v2 {
             match self {
-                Self::GPS_L1_CA
-                | Self::SBAS_L1_CA
-                | Self::GAL_E1_C
-                | Self::GAL_E1_B
-                | Self::QZSS_L1_CA
-                | Self::GLO_L1_OF
-                | Self::BDS_B1I_D1
-                | Self::BDS_B1I_D2
-                | Self::BDS_B2I_D1
-                | Self::BDS_B2I_D2 => "C1".to_string(),
                 Self::GPS_L2_CL
                 | Self::GPS_L2_CM
                 | Self::QZSS_L2_CM
                 | Self::QZSS_L2_CL
-                | Self::GLO_L2_OF => "C2".to_string(),
+                | Self::GLO_L2_OF => "S2".to_string(),
                 Self::GPS_L5_I
                 | Self::GPS_L5_Q
                 | Self::GAL_E5A_I
                 | Self::GAL_E5A_Q
                 | Self::QZSS_L5_I
                 | Self::QZSS_L5_Q
-                | Self::NAVIC_L5_A => "C5".to_string(),
-                Self::GAL_E5B_I | Self::GAL_E5B_Q => "C7".to_string(),
-                _ => "C1".to_string(),
+                | Self::NAVIC_L5_A => "S5".to_string(),
+                Self::GAL_E5B_I | Self::GAL_E5B_Q => "S7".to_string(),
+                _ => "S1".to_string(),
             }
         } else {
             match self {
@@ -293,11 +253,11 @@ impl SignalCarrier {
                 Self::GAL_E5A_Q => "S5Q".to_string(),
                 Self::GAL_E5B_I => "S7I".to_string(),
                 Self::GAL_E5B_Q => "S7Q".to_string(),
-                Self::BDS_B1I_D1 => "S1I".to_string(),
-                Self::BDS_B1I_D2 => "S1D".to_string(),
-                Self::BDS_B2I_D1 => "S5D".to_string(),
-                Self::BDS_B2I_D2 => "S7I".to_string(),
-                Self::BDS_B1C => "S1C".to_string(),
+                Self::BDS_B1I_D1 => "S2I".to_string(),
+                Self::BDS_B1I_D2 => "S2D".to_string(),
+                Self::BDS_B2I_D1 => "S7I".to_string(),
+                Self::BDS_B2I_D2 => "S7D".to_string(),
+                Self::BDS_B1C => "S5I".to_string(),
                 Self::BDS_B2A => "S5D".to_string(),
                 Self::QZSS_L1_CA => "S1C".to_string(),
                 Self::QZSS_L1_S => "S1Z".to_string(),

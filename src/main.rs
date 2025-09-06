@@ -51,7 +51,7 @@ use crate::{
     device::Device,
     runtime::Runtime,
     ubx::Settings as UbloxSettings,
-    utils::{to_constellation, SignalCarrier},
+    utils::to_constellation,
 };
 
 const SBAS_PRN_OFFSET: u8 = 100;
@@ -603,7 +603,7 @@ pub async fn main() {
             // In passive mode, there is not hardware acting as a throttle,
             // the channel capacity becomes the limit.
             // Adds a little bit of dead-time to reduce pressure on the data channel.
-            std::thread::sleep(std::time::Duration::from_millis(25));
+            std::thread::sleep(std::time::Duration::from_millis(50));
         }
     }
 }
