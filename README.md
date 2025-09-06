@@ -11,12 +11,10 @@ UBX2RINEX
 `ubx2rinex` is a small command line utility to deserialize
 a U-Blox data stream into standardized RINEX file(s).
 
-:warning: this tool is work in progress.
-
 ## Licensing
 
-This application is part of the [nav-solutions framework](https://github.com/nav-solutions) which
-is delivered under the [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
+This application is part of the [nav-solutions framework](https://github.com/nav-solutions) and
+is licensed under [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
 
 ## Constellations
 
@@ -54,7 +52,7 @@ Supported signals/modulations:
 
 ## Install from Cargo
 
-You can directly install the tool from Cargo with internet access:
+Install the latest official release from the worldwide portal directly:
 
 ```bash
 cargo install ubx2rinex
@@ -68,7 +66,13 @@ Download the version you are interested in:
 git clone https://github.com/nav-solutions/ubx2rinex
 ```
 
-And build it using cargo:
+Grab our test data if you're interested in the .UBX files:
+
+```bash
+git clone --recurse-submodules https://github.com/nav-solutions/ubx2rinex
+```
+
+Build the current version with:
 
 ```bash
 cargo build -r
