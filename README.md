@@ -50,6 +50,19 @@ Supported signals/modulations:
 - QZSS L1 S
 - IRNSS/NAV-IC L5 (A)
 
+## U-Blox protocol
+
+Supported UBX protocol versions
+
+- V14
+- V23 (Default) 
+- V27
+- V31
+
+You need to select one at least. When building with default features, you obtain the default UBX protocol.
+You cannot build this application with `--all-features` until further notice, because you can only select 
+one particular revision of the UBX protocol.
+
 ## Install from Cargo
 
 Install the latest official release from the worldwide portal directly:
@@ -58,7 +71,7 @@ Install the latest official release from the worldwide portal directly:
 cargo install ubx2rinex
 ```
 
-## Build from sources
+# Build from sources
 
 Download the version you are interested in:
 
@@ -72,14 +85,17 @@ Grab our test data if you're interested in the .UBX files:
 git clone --recurse-submodules https://github.com/nav-solutions/ubx2rinex
 ```
 
-Build the current version with:
+Build the latest version with default UBX protocol:
 
 ```bash
 cargo build -r
 ```
 
-The application uses the latest `UBX` protocol supported. This may unlock full potential
-of modern devices, and does not cause issues with older firmwares, simply restricted applications.
+Build for protocol v31 specifically:
+
+```bash
+cargo build -r --no-default-features --features ubx31
+```
 
 ## Getting started
 

@@ -27,7 +27,7 @@ jobs:
         sudo apt-get install -y libudev-dev
     
     - uses: actions-rs/cargo@v1
-      name: Build (all features)
+      name: Build (Default)
       with:
         command: build
-        args: --all-features
+        args: -r
