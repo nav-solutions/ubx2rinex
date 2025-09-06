@@ -202,21 +202,21 @@ impl SignalCarrier {
                 | Self::BDS_B1I_D1
                 | Self::BDS_B1I_D2
                 | Self::BDS_B2I_D1
-                | Self::BDS_B2I_D2 => "C1".to_string(),
+                | Self::BDS_B2I_D2 => "D1".to_string(),
                 Self::GPS_L2_CL
                 | Self::GPS_L2_CM
                 | Self::QZSS_L2_CM
                 | Self::QZSS_L2_CL
-                | Self::GLO_L2_OF => "C2".to_string(),
+                | Self::GLO_L2_OF => "D2".to_string(),
                 Self::GPS_L5_I
                 | Self::GPS_L5_Q
                 | Self::GAL_E5A_I
                 | Self::GAL_E5A_Q
                 | Self::QZSS_L5_I
                 | Self::QZSS_L5_Q
-                | Self::NAVIC_L5_A => "C5".to_string(),
-                Self::GAL_E5B_I | Self::GAL_E5B_Q => "C7".to_string(),
-                _ => "C1".to_string(),
+                | Self::NAVIC_L5_A => "D5".to_string(),
+                Self::GAL_E5B_I | Self::GAL_E5B_Q => "D7".to_string(),
+                _ => "D1".to_string(),
             }
         } else {
             match self {

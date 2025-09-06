@@ -18,6 +18,40 @@ a U-Blox data stream into standardized RINEX file(s).
 This application is part of the [nav-solutions framework](https://github.com/nav-solutions) which
 is delivered under the [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
 
+## Constellations
+
+Supported constellations: 
+
+- GPS (US)
+- Galileo (EU)
+- Glonass (RU)
+- BeiDou (CH)
+- QZSS (Japan)
+- IRNSS/NAV-IC (India)
+- SBAS
+
+## Signals
+
+Supported signals/modulations:
+
+- GPS L1 C/A
+- SBAS L1 C/A
+- QZSS L1 C/A
+- Galileo E1 (C+B)
+- Glonass L1
+- GPS L2 (M+L)
+- QZSS L2 (M+L)
+- Glonass L2
+- Galileo E5A (I+Q)
+- Galileo E5B (I+Q)
+- QZSS L5 (I+Q)
+- BDS B1i (D1+D2)
+- BDS B2i (D1+D2)
+- BDS B1C
+- BDS B2A
+- QZSS L1 S
+- IRNSS/NAV-IC L5 (A)
+
 ## Install from Cargo
 
 You can directly install the tool from Cargo with internet access:

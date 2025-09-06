@@ -3,6 +3,7 @@ use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
 
 use crate::{
     collecter::settings::{HealthMask, Settings as RinexSettings},
+    utils::SignalCarrier,
     UbloxSettings,
 };
 
@@ -47,63 +48,70 @@ impl Cli {
                             .long("gps")
                             .action(ArgAction::SetTrue)
                             .help("Activate GPS constellation")
-                            .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass", "sbas"]),
+                            .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
                             .help("Activate Galileo constellation")
-                            .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass", "sbas"]),
+                            .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
                             .help("Activate BDS (BeiDou) constellation")
-                            .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass", "sbas"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
                             .help("Activate QZSS constellation")
-                            .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass", "sbas"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
                             .help("Activate Glonass constellation")
-                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "sbas"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("sbas")
                             .long("sbas")
                             .action(ArgAction::SetTrue)
                             .help("Activate SBAS augmentation")
-                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass"]),
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass", "irnss"]),
+                    )
+                    .arg(
+                        Arg::new("irnss")
+                            .long("irnss")
+                            .action(ArgAction::SetTrue)
+                            .help("Activate IRNSS/NAVIC constellation")
+                            .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass", "sbas"]),
                     )
                     .next_help_heading("Signal selection - at least one required!")
                     .arg(
                         Arg::new("l1")
                             .long("l1")
                             .action(ArgAction::SetTrue)
-                            .help("Activate L1 signal for all constellations")
+                            .help("Activate L1 signal for all constellations. Not required when operating from UBX files.")
                             .required_unless_present_any(["file", "l2", "l5"]),
                     )
                     .arg(
                         Arg::new("l2")
                             .long("l2")
                             .action(ArgAction::SetTrue)
-                            .help("Activate L2 signal for all constellations")
+                            .help("Activate L2 signal for all constellations. Not required when operating from UBX files.")
                             .required_unless_present_any(["file", "l1", "l5"]),
                     )
                     .arg(
                         Arg::new("l5")
                             .long("l5")
                             .action(ArgAction::SetTrue)
-                            .help("Activate L5 signal for all constellations. Requires F9 or F10 series.")
+                            .help("Activate L5 signal for all constellations. Requires F9 or F10 series. Not required when operating from UBX files")
                             .required_unless_present_any(["file", "l1", "l2"]),
                     )
                     .next_help_heading("U-Blox configuration")
@@ -148,10 +156,12 @@ Customizes your RINEX content."))
                             .value_name("FILENAME")
                             .action(ArgAction::Append)
                             .required_unless_present_any(&["port"])
-                            .help("Load a single file. You can load as many as needed.
+                            .help("Load a single UBX file. You can load as many as needed.
 Each file descriptor is consumed one after the other (no priority). To obtain valid results,
 you might have to load them in correct chronological order (sampling order).
-Gzip compressed UBX files are natively supported but they must be terminated with '.gz'")
+Gzip compressed UBX files are natively supported but they must be terminated with '.gz'.
+You still have to select the constellation you are interested in (at least one).
+You don't have to select a signal.")
                     )
                     .next_help_heading("RINEX Collection")
                     .arg(
@@ -374,6 +384,10 @@ This is currently limited to the Navigation message collection and does not impa
         self.matches.get_flag("sbas")
     }
 
+    fn irnss(&self) -> bool {
+        self.matches.get_flag("irnss")
+    }
+
     fn constellations(&self) -> Vec<Constellation> {
         let mut constellations = Vec::<Constellation>::with_capacity(4);
 
@@ -395,20 +409,23 @@ This is currently limited to the Navigation message collection and does not impa
         if self.sbas() {
             constellations.push(Constellation::SBAS);
         }
+        if self.irnss() {
+            constellations.push(Constellation::IRNSS);
+        }
 
         constellations
     }
 
     fn l1(&self) -> bool {
-        self.matches.get_flag("l1")
+        self.matches.get_flag("l1") | self.matches.contains_id("file")
     }
 
     fn l2(&self) -> bool {
-        self.matches.get_flag("l2")
+        self.matches.get_flag("l2") | self.matches.contains_id("file")
     }
 
     fn l5(&self) -> bool {
-        self.matches.get_flag("l5")
+        self.matches.get_flag("l5") | self.matches.contains_id("file")
     }
 
     fn no_dop(&self) -> bool {
@@ -425,144 +442,587 @@ This is currently limited to the Navigation message collection and does not impa
 
     fn observables(&self) -> HashMap<Constellation, Vec<Observable>> {
         let v2 = self.matches.get_flag("v2");
+
+        let mut gps_observables = vec![];
+        let mut gal_observables = vec![];
+        let mut glo_observables = vec![];
+        let mut irnss_observables = vec![];
+        let mut bds_observables = vec![];
+        let mut sbas_observables = vec![];
+        let mut qzss_observables = vec![];
+
         let mut ret = HashMap::<Constellation, Vec<Observable>>::new();
 
-        for constell in self.constellations().iter() {
-            if self.l1() {
-                let mut observables = match constell {
-                    Constellation::GPS
-                    | Constellation::Glonass
-                    | Constellation::Galileo
-                    | Constellation::BeiDou
-                    | Constellation::SBAS
-                    | Constellation::QZSS => {
-                        if v2 {
-                            vec![
-                                Observable::from_str("C1").unwrap(),
-                                Observable::from_str("D1").unwrap(),
-                                Observable::from_str("L1").unwrap(),
-                            ]
-                        } else {
-                            vec![
-                                Observable::from_str("C1C").unwrap(),
-                                Observable::from_str("D1C").unwrap(),
-                                Observable::from_str("L1C").unwrap(),
-                            ]
-                        }
-                    },
-                    _ => {
-                        vec![]
-                    },
-                };
+        let constellations = self.constellations();
 
-                if self.no_dop() {
-                    observables.retain(|code| !code.is_doppler_observable());
-                }
-                if self.no_phase() {
-                    observables.retain(|code| !code.is_phase_range_observable());
-                }
-                if self.no_pr() {
-                    observables.retain(|code| !code.is_pseudo_range_observable());
+        if self.l1() {
+            if constellations.contains(&Constellation::GPS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L1_CA.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L1 observable");
+
+                    gps_observables.push(observable);
                 }
 
-                for observable in observables.iter() {
-                    if let Some(observables) = ret.get_mut(constell) {
-                        observables.push(observable.clone());
-                    } else {
-                        ret.insert(*constell, vec![observable.clone()]);
-                    }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L1_CA.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-C1 observable");
+
+                    gps_observables.push(observable);
+                }
+
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L1_CA.to_doppler_observable(v2))
+                            .expect("internal error: invalid GPS-D1 observable");
+
+                    gps_observables.push(observable);
                 }
             }
 
-            if self.l2() {
-                let mut observables = match constell {
-                    Constellation::GPS
-                    | Constellation::SBAS
-                    | Constellation::BeiDou
-                    | Constellation::Glonass
-                    | Constellation::QZSS => {
-                        if v2 {
-                            vec![
-                                Observable::from_str("C2").unwrap(),
-                                Observable::from_str("D2").unwrap(),
-                                Observable::from_str("L2").unwrap(),
-                            ]
-                        } else {
-                            vec![
-                                Observable::from_str("C2C").unwrap(),
-                                Observable::from_str("D2C").unwrap(),
-                                Observable::from_str("L2C").unwrap(),
-                            ]
-                        }
-                    },
-                    _ => {
-                        vec![]
-                    },
-                };
+            if constellations.contains(&Constellation::Galileo) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GAL_E1_C.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GAL-L1 observable");
 
-                if self.no_dop() {
-                    observables.retain(|code| !code.is_doppler_observable());
-                }
-                if self.no_phase() {
-                    observables.retain(|code| !code.is_phase_range_observable());
-                }
-                if self.no_pr() {
-                    observables.retain(|code| !code.is_pseudo_range_observable());
+                    gal_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GAL_E1_B.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GAL-L1 observable");
+
+                    gal_observables.push(observable);
                 }
 
-                for observable in observables.iter() {
-                    if let Some(observables) = ret.get_mut(constell) {
-                        observables.push(observable.clone());
-                    } else {
-                        ret.insert(*constell, vec![observable.clone()]);
-                    }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GAL_E1_C.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GAL-C1 observable");
+
+                    gal_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GAL_E1_B.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GAL-C1 observable");
+
+                    gal_observables.push(observable);
+                }
+
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GAL_E1_C.to_doppler_observable(v2))
+                            .expect("internal error: invalid GAL-D1 observable");
+
+                    gal_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GAL_E1_B.to_doppler_observable(v2))
+                            .expect("internal error: invalid GAL-D1 observable");
+
+                    gal_observables.push(observable);
                 }
             }
 
-            if self.l5() {
-                let mut observables = match constell {
-                    Constellation::GPS
-                    | Constellation::SBAS
-                    | Constellation::Galileo
-                    | Constellation::QZSS => {
-                        if v2 {
-                            vec![
-                                Observable::from_str("C5").unwrap(),
-                                Observable::from_str("D5").unwrap(),
-                                Observable::from_str("L5").unwrap(),
-                            ]
-                        } else {
-                            vec![
-                                Observable::from_str("C5C").unwrap(),
-                                Observable::from_str("D5C").unwrap(),
-                                Observable::from_str("L5C").unwrap(),
-                            ]
-                        }
-                    },
-                    _ => {
-                        vec![]
-                    },
-                };
+            if constellations.contains(&Constellation::BeiDou) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B1I_D1.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B1 observable");
 
-                if self.no_dop() {
-                    observables.retain(|code| !code.is_doppler_observable());
-                }
-                if self.no_phase() {
-                    observables.retain(|code| !code.is_phase_range_observable());
-                }
-                if self.no_pr() {
-                    observables.retain(|code| !code.is_pseudo_range_observable());
-                }
+                    bds_observables.push(observable);
 
-                for observable in observables.iter() {
-                    if let Some(observables) = ret.get_mut(constell) {
-                        observables.push(observable.clone());
-                    } else {
-                        ret.insert(*constell, vec![observable.clone()]);
-                    }
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B1I_D2.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B1I_D1.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B1I_D2.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B1I_D1.to_doppler_observable(v2))
+                            .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B1I_D2.to_doppler_observable(v2))
+                            .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::SBAS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::SBAS_L1_CA.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid SBAS-L1 observable");
+
+                    sbas_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::SBAS_L1_CA.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid SBAS-C1 observable");
+
+                    sbas_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::SBAS_L1_CA.to_doppler_observable(v2))
+                            .expect("internal error: invalid SBAS-C1 observable");
+
+                    sbas_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::QZSS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L1_CA.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-L1 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L1_S.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-L1 observable");
+
+                    qzss_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L1_CA.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-C1 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L1_S.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-C1 observable");
+
+                    qzss_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L1_CA.to_doppler_observable(v2))
+                            .expect("internal error: invalid QZSS-D1 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L1_S.to_doppler_observable(v2))
+                            .expect("internal error: invalid QZSS-D1 observable");
+
+                    qzss_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::Glonass) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GLO_L1_OF.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GLO-L1 observable");
+
+                    glo_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GLO_L1_OF.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GLO-C1 observable");
+
+                    glo_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GLO_L1_OF.to_doppler_observable(v2))
+                            .expect("internal error: invalid GLO-D1 observable");
+
+                    glo_observables.push(observable);
                 }
             }
         }
+
+        if self.l2() {
+            if constellations.contains(&Constellation::GPS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L2_CL.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L2 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L2_CM.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L2 observable");
+
+                    gps_observables.push(observable);
+                }
+
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L2_CL.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L2 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L2_CM.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L2 observable");
+
+                    gps_observables.push(observable);
+                }
+
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L2_CL.to_doppler_observable(v2))
+                            .expect("internal error: invalid GPS-D2 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L2_CM.to_doppler_observable(v2))
+                            .expect("internal error: invalid GPS-D2 observable");
+
+                    gps_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::BeiDou) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B2I_D1.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B2 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B2I_D2.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B2 observable");
+
+                    bds_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B2I_D1.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::BDS_B2I_D2.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid BDS-B1 observable");
+
+                    bds_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B2I_D1.to_doppler_observable(v2))
+                            .expect("internal error: invalid BDS-B2 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B2I_D2.to_doppler_observable(v2))
+                            .expect("internal error: invalid BDS-B2 observable");
+
+                    bds_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::QZSS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L2_CL.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-L2 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L2_CM.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-L2 observable");
+
+                    qzss_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L2_CL.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-C2 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L2_CM.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-C2 observable");
+
+                    qzss_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L2_CL.to_doppler_observable(v2))
+                            .expect("internal error: invalid QZSS-D2 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L2_CM.to_doppler_observable(v2))
+                            .expect("internal error: invalid QZSS-D2 observable");
+
+                    qzss_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::Glonass) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GLO_L2_OF.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GLO-L2 observable");
+
+                    glo_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GLO_L2_OF.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GLO-C2 observable");
+
+                    glo_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GLO_L2_OF.to_doppler_observable(v2))
+                            .expect("internal error: invalid GLO-D2 observable");
+
+                    glo_observables.push(observable);
+                }
+            }
+        }
+
+        if self.l5() {
+            if constellations.contains(&Constellation::GPS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L5_I.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L5 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L5_Q.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-L5 observable");
+
+                    gps_observables.push(observable);
+                }
+
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L5_I.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-C5 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::GPS_L5_Q.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid GPS-C5 observable");
+
+                    gps_observables.push(observable);
+                }
+
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L5_I.to_doppler_observable(v2))
+                            .expect("internal error: invalid GPS-D5 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L5_Q.to_doppler_observable(v2))
+                            .expect("internal error: invalid GPS-D5 observable");
+
+                    gps_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::QZSS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L5_I.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-L5 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L5_Q.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-L5 observable");
+
+                    qzss_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L5_I.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-C5 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable = Observable::from_str(
+                        &SignalCarrier::QZSS_L5_Q.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid QZSS-C5 observable");
+
+                    qzss_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L5_I.to_doppler_observable(v2))
+                            .expect("internal error: invalid QZSS-D5 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L5_Q.to_doppler_observable(v2))
+                            .expect("internal error: invalid QZSS-D5 observable");
+
+                    qzss_observables.push(observable);
+                }
+            }
+
+            if constellations.contains(&Constellation::IRNSS) {
+                if !self.no_phase() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::NAVIC_L5_A.to_phase_range_observable(v2),
+                    )
+                    .expect("internal error: invalid NAVIC-L5 observable");
+
+                    irnss_observables.push(observable);
+                }
+                if !self.no_pr() {
+                    let observable = Observable::from_str(
+                        &SignalCarrier::NAVIC_L5_A.to_pseudo_range_observable(v2),
+                    )
+                    .expect("internal error: invalid NAVIC-C5 observable");
+
+                    irnss_observables.push(observable);
+                }
+                if !self.no_dop() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::NAVIC_L5_A.to_doppler_observable(v2))
+                            .expect("internal error: invalid NAVIC-D5 observable");
+
+                    irnss_observables.push(observable);
+                }
+            }
+        }
+
+        for observable in gps_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::GPS) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::GPS, vec![observable.clone()]);
+            }
+        }
+
+        for observable in gal_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::Galileo) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::Galileo, vec![observable.clone()]);
+            }
+        }
+
+        for observable in sbas_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::SBAS) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::SBAS, vec![observable.clone()]);
+            }
+        }
+
+        for observable in bds_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::BeiDou) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::BeiDou, vec![observable.clone()]);
+            }
+        }
+
+        for observable in qzss_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::QZSS) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::QZSS, vec![observable.clone()]);
+            }
+        }
+
+        for observable in glo_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::Glonass) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::Glonass, vec![observable.clone()]);
+            }
+        }
+
+        for observable in irnss_observables.iter() {
+            if let Some(observables) = ret.get_mut(&Constellation::IRNSS) {
+                observables.push(observable.clone());
+            } else {
+                ret.insert(Constellation::IRNSS, vec![observable.clone()]);
+            }
+        }
+
         ret
     }
 
