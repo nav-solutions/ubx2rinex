@@ -295,6 +295,12 @@ to be wrapped into several lines if it exceeds 60 characters."))
                             .help("Do not track doppler shifts")
                     )
                     .arg(
+                        Arg::new("no-ssi")
+                            .long("no-ssi")
+                            .action(ArgAction::SetTrue)
+                            .help("Do not save SSI (received power) estimates")
+                    )
+                    .arg(
                         Arg::new("timescale")
                             .long("timescale")
                             .required(false)
@@ -403,7 +409,6 @@ This is currently limited to the Navigation message collection and does not impa
         if self.gps() {
             constellations.push(Constellation::GPS);
         }
-
         if self.galileo() {
             constellations.push(Constellation::Galileo);
         }
@@ -445,19 +450,35 @@ This is currently limited to the Navigation message collection and does not impa
     }
 
     fn l1(&self) -> bool {
-        self.matches.get_flag("l1") | self.matches.contains_id("file")
+        if self.serial_port().is_none() {
+            !self.matches.get_flag("l2") && !self.matches.get_flag("l5")
+        } else {
+            self.matches.get_flag("l1")
+        }
     }
 
     fn l2(&self) -> bool {
-        self.matches.get_flag("l2") | self.matches.contains_id("file")
+        if self.serial_port().is_none() {
+            !self.matches.get_flag("l1") && !self.matches.get_flag("l5")
+        } else {
+            self.matches.get_flag("l2")
+        }
     }
 
     fn l5(&self) -> bool {
-        self.matches.get_flag("l5") | self.matches.contains_id("file")
+        if self.serial_port().is_none() {
+            !self.matches.get_flag("l1") && !self.matches.get_flag("l2")
+        } else {
+            self.matches.get_flag("l5")
+        }
     }
 
     fn no_dop(&self) -> bool {
         self.matches.get_flag("no-dop")
+    }
+
+    fn no_ssi(&self) -> bool {
+        self.matches.get_flag("no-ssi")
     }
 
     fn no_pr(&self) -> bool {
@@ -510,6 +531,14 @@ This is currently limited to the Navigation message collection and does not impa
 
                     gps_observables.push(observable);
                 }
+
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L1_CA.to_ssi_observable(v2))
+                            .expect("internal error: invalid GPS-S1 observable");
+
+                    gps_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::Galileo) {
@@ -555,6 +584,20 @@ This is currently limited to the Navigation message collection and does not impa
                     let observable =
                         Observable::from_str(&SignalCarrier::GAL_E1_B.to_doppler_observable(v2))
                             .expect("internal error: invalid GAL-D1 observable");
+
+                    gal_observables.push(observable);
+                }
+
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GAL_E1_C.to_ssi_observable(v2))
+                            .expect("internal error: invalid GAL-S1 observable");
+
+                    gal_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GAL_E1_B.to_ssi_observable(v2))
+                            .expect("internal error: invalid GAL-S1 observable");
 
                     gal_observables.push(observable);
                 }
@@ -604,6 +647,19 @@ This is currently limited to the Navigation message collection and does not impa
 
                     bds_observables.push(observable);
                 }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B1I_D1.to_ssi_observable(v2))
+                            .expect("internal error: invalid BDS-S1 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B1I_D2.to_ssi_observable(v2))
+                            .expect("internal error: invalid BDS-S1 observable");
+
+                    bds_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::SBAS) {
@@ -627,6 +683,13 @@ This is currently limited to the Navigation message collection and does not impa
                     let observable =
                         Observable::from_str(&SignalCarrier::SBAS_L1_CA.to_doppler_observable(v2))
                             .expect("internal error: invalid SBAS-C1 observable");
+
+                    sbas_observables.push(observable);
+                }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::SBAS_L1_CA.to_ssi_observable(v2))
+                            .expect("internal error: invalid SBAS-S1 observable");
 
                     sbas_observables.push(observable);
                 }
@@ -676,6 +739,19 @@ This is currently limited to the Navigation message collection and does not impa
 
                     qzss_observables.push(observable);
                 }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L1_CA.to_ssi_observable(v2))
+                            .expect("internal error: invalid QZSS-S1 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L1_S.to_ssi_observable(v2))
+                            .expect("internal error: invalid QZSS-S1 observable");
+
+                    qzss_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::Glonass) {
@@ -699,6 +775,13 @@ This is currently limited to the Navigation message collection and does not impa
                     let observable =
                         Observable::from_str(&SignalCarrier::GLO_L1_OF.to_doppler_observable(v2))
                             .expect("internal error: invalid GLO-D1 observable");
+
+                    glo_observables.push(observable);
+                }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GLO_L1_OF.to_ssi_observable(v2))
+                            .expect("internal error: invalid GLO-S1 observable");
 
                     glo_observables.push(observable);
                 }
@@ -752,6 +835,20 @@ This is currently limited to the Navigation message collection and does not impa
 
                     gps_observables.push(observable);
                 }
+
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L2_CL.to_ssi_observable(v2))
+                            .expect("internal error: invalid GPS-S2 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L2_CM.to_ssi_observable(v2))
+                            .expect("internal error: invalid GPS-S2 observable");
+
+                    gps_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::BeiDou) {
@@ -795,6 +892,19 @@ This is currently limited to the Navigation message collection and does not impa
                     let observable =
                         Observable::from_str(&SignalCarrier::BDS_B2I_D2.to_doppler_observable(v2))
                             .expect("internal error: invalid BDS-B2 observable");
+
+                    bds_observables.push(observable);
+                }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B2I_D1.to_ssi_observable(v2))
+                            .expect("internal error: invalid BDS-S2 observable");
+
+                    bds_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::BDS_B2I_D2.to_ssi_observable(v2))
+                            .expect("internal error: invalid BDS-S2 observable");
 
                     bds_observables.push(observable);
                 }
@@ -844,6 +954,19 @@ This is currently limited to the Navigation message collection and does not impa
 
                     qzss_observables.push(observable);
                 }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L2_CL.to_ssi_observable(v2))
+                            .expect("internal error: invalid QZSS-S2 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L2_CM.to_ssi_observable(v2))
+                            .expect("internal error: invalid QZSS-S2 observable");
+
+                    qzss_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::Glonass) {
@@ -867,6 +990,13 @@ This is currently limited to the Navigation message collection and does not impa
                     let observable =
                         Observable::from_str(&SignalCarrier::GLO_L2_OF.to_doppler_observable(v2))
                             .expect("internal error: invalid GLO-D2 observable");
+
+                    glo_observables.push(observable);
+                }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GLO_L2_OF.to_ssi_observable(v2))
+                            .expect("internal error: invalid GLO-S2 observable");
 
                     glo_observables.push(observable);
                 }
@@ -920,6 +1050,19 @@ This is currently limited to the Navigation message collection and does not impa
 
                     gps_observables.push(observable);
                 }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L5_I.to_ssi_observable(v2))
+                            .expect("internal error: invalid GPS-S5 observable");
+
+                    gps_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::GPS_L5_Q.to_ssi_observable(v2))
+                            .expect("internal error: invalid GPS-S5 observable");
+
+                    gps_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::QZSS) {
@@ -966,6 +1109,19 @@ This is currently limited to the Navigation message collection and does not impa
 
                     qzss_observables.push(observable);
                 }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L5_I.to_ssi_observable(v2))
+                            .expect("internal error: invalid QZSS-S5 observable");
+
+                    qzss_observables.push(observable);
+
+                    let observable =
+                        Observable::from_str(&SignalCarrier::QZSS_L5_Q.to_ssi_observable(v2))
+                            .expect("internal error: invalid QZSS-S5 observable");
+
+                    qzss_observables.push(observable);
+                }
             }
 
             if constellations.contains(&Constellation::IRNSS) {
@@ -989,6 +1145,13 @@ This is currently limited to the Navigation message collection and does not impa
                     let observable =
                         Observable::from_str(&SignalCarrier::NAVIC_L5_A.to_doppler_observable(v2))
                             .expect("internal error: invalid NAVIC-D5 observable");
+
+                    irnss_observables.push(observable);
+                }
+                if !self.no_ssi() {
+                    let observable =
+                        Observable::from_str(&SignalCarrier::NAVIC_L5_A.to_ssi_observable(v2))
+                            .expect("internal error: invalid NAVIC-S5 observable");
 
                     irnss_observables.push(observable);
                 }
