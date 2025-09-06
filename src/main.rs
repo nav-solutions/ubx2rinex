@@ -258,6 +258,7 @@ fn consume_device(
                     },
                 }
             },
+
             PacketRef::MonHw(mon_hardware) => {
                 // TODO: contributes to hardware events
                 let _ = mon_hardware.a_status();
@@ -265,6 +266,7 @@ fn consume_device(
                 // TODO: contributes to hardware events
                 let _ = mon_hardware.a_power();
             },
+
             PacketRef::NavSat(pkt) => {
                 for sv in pkt.svs() {
                     let constellation = to_constellation(sv.gnss_id());
@@ -333,7 +335,7 @@ fn consume_device(
 
                 trace!("{} - End of Epoch", t_gpst.round(cfg_precision));
 
-                let _ = nav_tx.try_send(Message::EndofEpoch(t_gpst));
+                let _ = nav_tx.try_send(Message::EndofEpoch());
             },
 
             PacketRef::NavPvt(pkt) => {
@@ -352,13 +354,9 @@ fn consume_device(
                 }
             },
 
-            PacketRef::MgaGpsEph(_) | PacketRef::MgaGloEph(_) => {
-                // MGA-EPH uplink
-            },
-
-            PacketRef::MgaGpsIono(_) => {
-                // MGA-IONO
-            },
+            PacketRef::MgaGpsEph(_) => {},
+            PacketRef::MgaGloEph(_) => {},
+            PacketRef::MgaGpsIono(_) => {},
 
             PacketRef::NavClock(pkt) => {
                 // Do not process if user is not interested in this channel.

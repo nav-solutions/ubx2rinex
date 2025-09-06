@@ -1,7 +1,10 @@
 use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
 
-use crate::{collecter::settings::Settings as RinexSettings, UbloxSettings};
+use crate::{
+    collecter::settings::{HealthMask, Settings as RinexSettings},
+    UbloxSettings,
+};
 
 use std::{collections::HashMap, str::FromStr};
 
@@ -170,12 +173,14 @@ When not defined, the default value is \"UBXR\".")
                     .arg(
                         Arg::new("period")
                             .long("period")
-                            .short('p')
                             .action(ArgAction::Set)
                             .required(false)
                             .help("Define snapshot (=collection) period.
-The snapshot period defines how often a new RINEX file is released.
-")
+The snapshot period defines the total duration of your RINEX file and how often it is released.
+Our default snapshot period is set to 1 hour.
+Modify this value to 24hours for standard daily files, with --period \"24 h\".
+Other example, 12h period: --period \"12 h\".
+Other example, half hour period: --period \"30 mins\".")
                     )
                     .arg(
                         Arg::new("v2")
@@ -197,6 +202,12 @@ We use V3 by default, because very few tools support V4 properly to this day.")
                             .action(ArgAction::SetTrue)
                             .help("Prefer long (V3 like) file names over short (V2) file names")
                     )
+                    .arg(
+                        Arg::new("gzip")
+                            .long("gzip")
+                            .action(ArgAction::SetTrue)
+                            .help("Gzip compress the RINEX output.
+You can combine this to CRINEX compression for maximal signal storage effiency."))
                     .arg(
                         Arg::new("country")
                             .short('c')
@@ -276,12 +287,6 @@ Default value is GPST."
                             .action(ArgAction::SetTrue)
                             .help("Activate CRINEX compression, for optimized RINEX size. Disabled by default."),
                     )
-                    .arg(
-                        Arg::new("gzip")
-                            .long("gzip")
-                            .action(ArgAction::SetTrue)
-                            .help("Gzip compress the RINEX output.
-You can combine this to CRINEX compression for effiency."))
                     .next_help_heading("Navigation messages collection")
                             .arg(
                                 Arg::new("nav")
@@ -290,6 +295,32 @@ You can combine this to CRINEX compression for effiency."))
                                     .action(ArgAction::SetTrue)
                                     .help("Activate Navigation messages collection, which is not enabled by default.")
                             )
+                            .arg(
+                                Arg::new("nav-period")
+                                    .long("nav-period")
+                                    .required(false)
+                                    .action(ArgAction::Set)
+                                    .help("Define how often Navigation messages (ephemeris, etc..) are dumped into resulting RINEX.
+Dumping period is always aligned to midnight. When time is reached, we dump the first message received of each kind (no fancy logic).
+This value needs to be under the message validity for correct post processed navigation.
+By default, we use a 2h message rate, which is more than enough considering all navigation messages.
+But you can customize that, either to reduce the output file size, or increase the message rate.
+Example --nav-period \"1 hour\" to reduce to 1hr message period.
+Example --nav-period \"30 mins\" to reduce to 30min message period."))
+                            .arg(
+                                Arg::new("healthy-only")
+                                    .long("healthy")
+                                    .required(false)
+                                    .action(ArgAction::SetTrue)
+                                    .help("Dump messages for healthy satellites only.
+This is currently limited to the Navigation message collection and does not impact signal collection."))
+                            .arg(
+                                Arg::new("unhealthy-only")
+                                    .long("unhealthy")
+                                    .required(false)
+                                    .action(ArgAction::SetTrue)
+                                    .help("Dump messages for unhealthy or beta-tested satellites only.
+This is currently limited to the Navigation message collection and does not impact signal collection."))
                     .get_matches()
             },
         }
@@ -643,15 +674,24 @@ You can combine this to CRINEX compression for effiency."))
             } else {
                 "UBXR".to_string()
             },
-            period: if let Some(period) = self.matches.get_one::<String>("period") {
-                let dt = period
-                    .trim()
-                    .parse::<Duration>()
-                    .unwrap_or_else(|e| panic!("Invalid duration: {}", e));
-
-                dt
+            period: if let Some(period) = self.matches.get_one::<Duration>("period") {
+                *period
             } else {
                 Duration::from_hours(1.0)
+            },
+            nav_period: if let Some(period) = self.matches.get_one::<Duration>("nav-period") {
+                *period
+            } else {
+                Duration::from_hours(2.0)
+            },
+            health_mask: {
+                if self.matches.get_flag("healthy-only") {
+                    HealthMask::HealthyOnly
+                } else if self.matches.get_flag("unhealthy-only") {
+                    HealthMask::UnhealthyOnly
+                } else {
+                    HealthMask::Any
+                }
             },
         }
     }

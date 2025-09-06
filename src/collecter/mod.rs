@@ -21,7 +21,7 @@ pub enum Message {
     HeaderComment(String),
 
     /// [Message::EndofEpoch] notification
-    EndofEpoch(Epoch),
+    EndofEpoch(),
 
     /// New clock state [s]
     Clock(f64),

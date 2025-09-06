@@ -27,7 +27,7 @@ env_logger = "0.11"
 pretty_env_logger = "0.5"
 serialport = "4.7"
 tokio = { version = "1.43", features = ["full"] }
-rinex = { version = "0.21", features = ["obs", "nav"] }
 gnss-protos = { version = "0.0.2", features = ["gps"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
 ublox = { version = "0.6", features = ["std", "sfrbx-gps", "ubx_proto23"] }
+rinex = { git = "https://github.com/nav-solutions/rinex", rev = "9aa34c24f3d9b86d9acfa30711b4139c079dea70", features = ["obs", "nav"] }

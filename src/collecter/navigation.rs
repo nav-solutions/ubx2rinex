@@ -71,7 +71,7 @@ impl Collecter {
         }
     }
 
-    /// Obtain a new file descriptor
+    /// Obtain a new [FileDescriptor]
     fn fd(&self) -> FileDescriptor {
         let filename = self.settings.filename(true, self.epoch);
         FileDescriptor::new(self.settings.gzip, &filename)
@@ -81,9 +81,15 @@ impl Collecter {
         loop {
             match self.rx.recv().await {
                 Some(msg) => match msg {
-                    Message::EndofEpoch(t) => {},
+                    Message::FirmwareVersion(version) => {
+                        self.ubx_settings.firmware = Some(version.to_string());
+                    },
 
-                    Message::FirmwareVersion(version) => {},
+                    Message::HeaderComment(comment) => {
+                        if self.header_comments.len() < 16 {
+                            self.header_comments.push(comment);
+                        }
+                    },
 
                     Message::Ephemeris((epoch, sv, ephemeris)) => {
                         if !self.header_released {
@@ -101,13 +107,14 @@ impl Collecter {
                         }
 
                         match self.release_message(epoch, sv, ephemeris) {
-                            Ok(_) => {},
+                            Ok(_) => {
+                                debug!("{}({}) - published ephemeris message", epoch, sv);
+                            },
                             Err(e) => {
                                 error!("{} - failed to release epoch: {}", self.epoch, e);
                             },
                         }
 
-                        debug!("{} - new epoch", epoch);
                         self.epoch = epoch;
                     },
 
@@ -209,7 +216,7 @@ impl Collecter {
                     sv, y, m, d, hh, mm, ss
                 )?;
             },
-            2 => {
+            _ => {
                 if self.ubx_settings.constellations.len() == 1 {
                     write!(
                         fd,
@@ -231,8 +238,11 @@ impl Collecter {
                     )?;
                 }
             },
-            _ => {},
         }
+
+        // format payload
+        let version = Version::from_major(self.settings.major);
+        ephemeris.format(fd, sv, version, NavMessageType::LNAV)?;
 
         Ok(())
     }
