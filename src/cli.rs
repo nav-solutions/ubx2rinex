@@ -42,57 +42,64 @@ impl Cli {
                             .value_name("Baudrate (u32)")
                             .help("Define serial port baud rate. Communications will not work if your U-Blox streams at a different data-rate. By default we use 115_200"),
                     )
-                    .next_help_heading("Constellation selection - at lease one required!")
+                    .next_help_heading("Constellation selection")
                     .arg(
                         Arg::new("gps")
                             .long("gps")
                             .action(ArgAction::SetTrue)
-                            .help("Activate GPS constellation")
+                            .help("Activate GPS constellation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "galileo", "beidou", "qzss", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("galileo")
                             .long("galileo")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Galileo constellation")
+                            .help("Activate Galileo constellation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "gps", "beidou", "qzss", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("bds")
                             .long("bds")
                             .action(ArgAction::SetTrue)
-                            .help("Activate BDS (BeiDou) constellation")
+                            .help("Activate BDS (BeiDou) constellation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "galileo", "gps", "qzss", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("qzss")
                             .long("qzss")
                             .action(ArgAction::SetTrue)
-                            .help("Activate QZSS constellation")
+                            .help("Activate QZSS constellation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "galileo", "gps", "bds", "glonass", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("glonass")
                             .long("glonass")
                             .action(ArgAction::SetTrue)
-                            .help("Activate Glonass constellation")
+                            .help("Activate Glonass constellation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "sbas", "irnss"]),
                     )
                     .arg(
                         Arg::new("sbas")
                             .long("sbas")
                             .action(ArgAction::SetTrue)
-                            .help("Activate SBAS augmentation")
+                            .help("Activate SBAS augmentation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass", "irnss"]),
                     )
                     .arg(
                         Arg::new("irnss")
                             .long("irnss")
                             .action(ArgAction::SetTrue)
-                            .help("Activate IRNSS/NAVIC constellation")
+                            .help("Activate IRNSS/NAVIC constellation.
+When working from UBX files, this serves as a data filter.")
                             .required_unless_present_any(["file", "galileo", "gps", "bds", "qzss", "glonass", "sbas"]),
                     )
-                    .next_help_heading("Signal selection - at least one required!")
+                    .next_help_heading("Signal selection")
                     .arg(
                         Arg::new("l1")
                             .long("l1")
@@ -396,6 +403,7 @@ This is currently limited to the Navigation message collection and does not impa
         if self.gps() {
             constellations.push(Constellation::GPS);
         }
+
         if self.galileo() {
             constellations.push(Constellation::Galileo);
         }
@@ -413,6 +421,24 @@ This is currently limited to the Navigation message collection and does not impa
         }
         if self.irnss() {
             constellations.push(Constellation::IRNSS);
+        }
+
+        if self.serial_port().is_none() {
+            // we're in passive mode
+            if constellations.is_empty() {
+                // no user choice: activate everything
+                for constellation in [
+                    Constellation::GPS,
+                    Constellation::Galileo,
+                    Constellation::QZSS,
+                    Constellation::BeiDou,
+                    Constellation::SBAS,
+                    Constellation::Glonass,
+                    Constellation::IRNSS,
+                ] {
+                    constellations.push(constellation);
+                }
+            }
         }
 
         constellations

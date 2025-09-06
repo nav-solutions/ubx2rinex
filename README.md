@@ -107,14 +107,24 @@ Connecting and operating a GNSS module requires more knowledge and involes more 
 Mostly, to configure the hardware and operate correctly. One example would be the selection
 of the desired Constellation, and navigation signals. You select this mode of operation by
 connecting to a device with `-p,--port` (mandatory).
+In active mode, you must select at least one constellation and one signal. For example, `--gps` and `--l1`.
 
 When operating in passive mode, all hardware related options no longer apply.
 You select this mode of operation by loading at least one file with `-f,--file` (mandatory).
-Passive deployment example:
+For example:
 
 ```bash
-ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --l1 --gps --bds --galileo
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz
 ```
+
+Will deserialize any data to be encountered. But you can select Constellations specifically,
+for example:
+
+```bash
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --gps
+```
+
+Will only deserialize GPS data.
 
 In any case, either `-p,--port` or `-f,--file` is required and they are mutually exclusive:
 you cannot operate in both modes at the same time.
