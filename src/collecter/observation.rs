@@ -8,12 +8,12 @@ use std::{
 use rinex::{
     error::FormattingError,
     hardware::{Antenna, Receiver},
+    hatanaka::Compressor,
     observation::{ClockObservation, HeaderFields as ObsHeader},
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
         Constellation, Epoch, Header, Observable, RinexType, CRINEX,
     },
-    hatanaka::Compressor,
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
@@ -69,7 +69,6 @@ impl Collecter {
         shutdown: WatchRx<bool>,
         rx: Rx<Message>,
     ) -> Self {
-            
         let mut compressor = Compressor::default();
         compressor.v3 = settings.major > 2;
 
