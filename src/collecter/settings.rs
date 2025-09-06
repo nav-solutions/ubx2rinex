@@ -29,6 +29,7 @@ pub struct Settings {
 
     /// GZIP compression
     pub gzip: bool,
+
     /// CRINEX compression
     pub crinex: bool,
 

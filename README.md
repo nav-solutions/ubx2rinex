@@ -225,12 +225,53 @@ every time a new gathering period starts.
 File name conventions
 =====================
 
-`ubx2rinex` follows and uses RINEX standard conventions. By default we will generate
-RINEX `V2` (short) filenames, as it only requires one field to be complete.
-By default, this field is set to `UBX`, but you can change that with `--name`:
+`UBX2RINEX` will generate short (V2) standardized RINEX file names by default,
+even though we generate a V3 file format by default.
 
 ```bash
-RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps --name M8T
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --gps
+```
+
+This is because the V3 file format is the most common and normal RINEX format.
+Yet, it is impossible to generate a valid V3 file name by default.
+
+To switch to V3 file name by default, simply use `-l,--long`, which means
+you prefer longer filenames. But to obtain a valid file name, you should specify
+a country code as well:
+
+```bash
+ubx2rinex -l --gps -c USA -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+Note that country codes are always 3 letters.
+
+The receiver model also impacts the standardized V2/V3 standardized filename.
+For example, here we emphasize that this is a F9T receiver model, and that applies
+to each standard:
+
+```bash
+ubx2rinex -m F9T --gps -c USA -f data/UBX/F9T-L2-5min.ubx.gz
+ubx2rinex -l -m F9T --gps -c USA -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+You can generate a completely custom name and not use the standard generator:
+
+```bash
+ubx2rinex -n CUSTOM --gps -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+And still take advantage of session customization, for example:
+
+```bash
+ubx2rinex -n CUSTOM -m F9T --gps -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+You can select a destination folder with `--prefix`, which applies to either
+customized or standardize names:
+
+```bash
+ubx2rinex --prefix /tmp -m F9T --gps -f data/UBX/F9T-L2-5min.ubx.gz
+ubx2rinex --prefix /tmp -n CUSTOM -m F9T --gps -f data/UBX/F9T-L2-5min.ubx.gz
 ```
 
 Signal Collection

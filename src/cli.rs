@@ -210,8 +210,10 @@ We use V3 by default, because very few tools support V4 properly to this day.")
                     .arg(
                         Arg::new("long")
                             .short('l')
+                            .long("long")
                             .action(ArgAction::SetTrue)
-                            .help("Prefer long (V3 like) file names over short (V2) file names")
+                            .help("Prefer long (V3 like) file names over short (V2) file names.
+You must define a Country code to obtain a valid file name.")
                     )
                     .arg(
                         Arg::new("gzip")
