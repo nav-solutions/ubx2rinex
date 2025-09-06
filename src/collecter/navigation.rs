@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    collections::HashMap,
     io::{BufWriter, Write},
 };
 
@@ -7,8 +8,8 @@ use log::{debug, error, info};
 
 use rinex::{
     error::FormattingError,
-    navigation::{NavFrame, NavFrameType, NavKey, NavMessageType},
-    prelude::{Constellation, Epoch, Header, RinexType, Version},
+    navigation::{Ephemeris, NavFrame, NavFrameType, NavKey, NavMessageType},
+    prelude::{Constellation, Epoch, Header, RinexType, Version, SV},
     record::Record,
 };
 
@@ -99,25 +100,15 @@ impl Collecter {
                             self.header_released = true;
                         }
 
-                        let key = NavKey {
-                            sv,
-                            epoch,
-                            msgtype: NavMessageType::LNAV,
-                            frmtype: NavFrameType::Ephemeris,
-                        };
+                        match self.release_message(epoch, sv, ephemeris) {
+                            Ok(_) => {},
+                            Err(e) => {
+                                error!("{} - failed to release epoch: {}", self.epoch, e);
+                            },
+                        }
 
-                        debug!("{}({}) - new LNAV ephemeris", epoch, sv);
-
-                        let frame = NavFrame::EPH(ephemeris);
-
-                        // let rec = self
-                        //     .record
-                        //     .as_mut_nav()
-                        //     .expect("internal error: invalid nav setup");
-
-                        // rec.insert(key, frame);
-
-                        self.epoch = epoch; // update
+                        debug!("{} - new epoch", epoch);
+                        self.epoch = epoch;
                     },
 
                     Message::Shutdown => {
@@ -178,6 +169,70 @@ impl Collecter {
 
         let _ = fd.flush(); // can fail
         self.fd = Some(fd);
+
+        Ok(())
+    }
+
+    fn release_message(
+        &mut self,
+        epoch: Epoch,
+        sv: SV,
+        ephemeris: Ephemeris,
+    ) -> Result<(), FormattingError> {
+        let mut fd = self.fd.as_mut().unwrap();
+
+        // write epoch
+        let (y, m, d, hh, mm, ss, nanos) = self.epoch.to_gregorian(self.epoch.time_scale);
+
+        let decis = nanos / 100_000;
+
+        match self.settings.major {
+            4 => {
+                write!(
+                    fd,
+                    "> EPH {:x} {}\n{:x} {:04} {:02} {:02} {:02} {:02} {:02}",
+                    sv,
+                    NavMessageType::LNAV,
+                    sv,
+                    y,
+                    m,
+                    d,
+                    hh,
+                    mm,
+                    ss
+                )?;
+            },
+            3 => {
+                write!(
+                    fd,
+                    "{:x} {:04} {:02} {:02} {:02} {:02} {:02}",
+                    sv, y, m, d, hh, mm, ss
+                )?;
+            },
+            2 => {
+                if self.ubx_settings.constellations.len() == 1 {
+                    write!(
+                        fd,
+                        "{:02} {:02} {:02} {:02} {:02} {:02} {:2}.{:01}",
+                        sv.prn,
+                        y - 2000,
+                        m,
+                        d,
+                        hh,
+                        mm,
+                        ss,
+                        decis
+                    )?;
+                } else {
+                    write!(
+                        fd,
+                        "{:x} {:04} {:02} {:02} {:02} {:02} {:02}",
+                        sv, y, m, d, hh, mm, ss
+                    )?;
+                }
+            },
+            _ => {},
+        }
 
         Ok(())
     }

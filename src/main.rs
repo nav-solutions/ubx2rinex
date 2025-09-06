@@ -102,6 +102,7 @@ fn consume_device(
                                                 runtime.utc_time().round(cfg_precision),
                                                 interpretation
                                             );
+
                                             runtime.latch_sfrbx(sv, interpretation, cfg_precision);
                                         } else {
                                             error!(
@@ -578,7 +579,7 @@ pub async fn main() {
         if ubx_settings.ephemeris {
             for (sv, pending) in rtm.pending_frames.iter() {
                 if let Some(validated) = pending.validate() {
-                    let (epoch, rinex) = validated.to_rinex();
+                    let (epoch, rinex) = validated.to_rinex(rtm.utc_time());
 
                     // redact message
                     match nav_tx.try_send(Message::Ephemeris((epoch, *sv, rinex))) {

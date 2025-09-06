@@ -19,13 +19,20 @@ pub struct GpsQzssEphemeris {
 }
 
 impl GpsQzssEphemeris {
+    /// Obtain correct week number
+    pub fn unwrapped_week_number(now: Epoch, week: u16) -> u32 {
+        let current_week = now.to_time_of_week().0;
+        let delta = current_week - week as u32;
+        let rollover = (delta as f64 / 1024.0).round() as u32;
+        week as u32 + rollover * 1024
+    }
+
     /// Converts [Ephemeris] to (Epoch=ToC, [RINEX])
-    pub fn to_rinex(&self) -> (Epoch, RINEX) {
-        let toc = Epoch::from_time_of_week(
-            self.frame1.week as u32,
-            self.frame1.toc as u64,
-            TimeScale::GPST,
-        );
+    pub fn to_rinex(&self, now: Epoch) -> (Epoch, RINEX) {
+        let week =
+            Self::unwrapped_week_number(now.to_time_scale(TimeScale::GPST), self.frame1.week);
+
+        let toc = Epoch::from_time_of_week(week, self.frame1.toc as u64, TimeScale::GPST);
 
         (
             toc,
@@ -85,9 +92,9 @@ pub enum Ephemeris {
 
 impl Ephemeris {
     /// Converts [Ephemeris] to (Epoch=ToC, [RINEX])
-    pub fn to_rinex(&self) -> (Epoch, RINEX) {
+    pub fn to_rinex(&self, now: Epoch) -> (Epoch, RINEX) {
         match self {
-            Self::GpsQzss(ephemeris) => ephemeris.to_rinex(),
+            Self::GpsQzss(ephemeris) => ephemeris.to_rinex(now),
         }
     }
 }
