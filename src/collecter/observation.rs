@@ -9,7 +9,7 @@ use rinex::{
     error::FormattingError,
     hardware::{Antenna, Receiver},
     hatanaka::Compressor,
-    observation::{ClockObservation, HeaderFields as ObsHeader},
+    observation::{ClockObservation, HeaderFields as ObsHeader, SNR},
     prelude::{
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
         Constellation, Epoch, Header, Observable, RinexType, CRINEX,
@@ -189,9 +189,9 @@ impl Collecter {
                                 self.buf.signals.push(SignalObservation {
                                     sv: rawxm.sv,
                                     lli: None,
-                                    snr: None,
                                     observable,
                                     value: rawxm.pr,
+                                    snr: Some(SNR::from(rawxm.cno as f64)),
                                 });
                             },
                             Err(_) => {
@@ -207,9 +207,9 @@ impl Collecter {
                                 self.buf.signals.push(SignalObservation {
                                     sv: rawxm.sv,
                                     lli: None,
-                                    snr: None,
                                     observable,
                                     value: rawxm.cp,
+                                    snr: Some(SNR::from(rawxm.cno as f64)),
                                 });
                             },
                             Err(_) => {
@@ -225,9 +225,9 @@ impl Collecter {
                                 self.buf.signals.push(SignalObservation {
                                     sv: rawxm.sv,
                                     lli: None,
-                                    snr: None,
                                     observable,
                                     value: rawxm.dop as f64,
+                                    snr: Some(SNR::from(rawxm.cno as f64)),
                                 });
                             },
                             Err(_) => {
@@ -243,8 +243,8 @@ impl Collecter {
                                 self.buf.signals.push(SignalObservation {
                                     sv: rawxm.sv,
                                     lli: None,
-                                    snr: None,
                                     observable,
+                                    snr: None,
                                     value: rawxm.cno as f64,
                                 });
                             },
