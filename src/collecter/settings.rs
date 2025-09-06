@@ -10,6 +10,18 @@ use rinex::{
     production::{FFU, PPU},
 };
 
+#[derive(Debug, Default, Copy, Clone, PartialEq)]
+pub enum HealthMask {
+    #[default]
+    Any,
+
+    /// collection limited to healthy satellites only
+    HealthyOnly,
+
+    /// collection limited to un-healthy satellites only
+    UnhealthyOnly,
+}
+
 #[derive(Debug, Clone)]
 pub struct Settings {
     /// Release Major version
@@ -17,15 +29,19 @@ pub struct Settings {
 
     /// GZIP compression
     pub gzip: bool,
+
     /// CRINEX compression
     pub crinex: bool,
 
     /// Custom name
     pub name: String,
+
     /// Custom country code
     pub country: String,
+
     /// Snapshot period
     pub period: Duration,
+
     /// Prefers short RINEX file name
     pub short_filename: bool,
 
@@ -46,6 +62,12 @@ pub struct Settings {
 
     /// Observables per system
     pub observables: HashMap<Constellation, Vec<Observable>>,
+
+    /// Custom navigation message period
+    pub nav_period: Duration,
+
+    /// Satellite Health mask
+    pub health_mask: HealthMask,
 }
 
 impl Settings {

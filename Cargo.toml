@@ -1,11 +1,11 @@
 [package]
 name = "ubx2rinex"
-version = "0.2.0"
+version = "0.3.0"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "U-Blox to RINEX deserializer"
-homepage = "https://github.com/rtk-rs"
-repository = "https://github.com/rtk-rs/ubx2rinex"
+homepage = "https://github.com/nav-solutions"
+repository = "https://github.com/nav-solutions/ubx2rinex"
 keywords = ["gnss", "gps", "geo"]
 categories = ["science", "science::geo", "command-line-interface", "command-line-utilities"]
 edition = "2021"
@@ -13,6 +13,22 @@ readme = "README.md"
 exclude = [
     "data/*",
 ]
+
+[features]
+# U-Blox v23 by default
+default = ["ublox/ubx_proto23"]
+
+# Select U-Blox v14 protocol
+ubx14 = ["ublox/ubx_proto14"]
+
+# Select U-Blox v23 protocol
+ubx23 = ["ublox/ubx_proto23"]
+
+# Select U-Blox v27 protocol
+ubx27 = ["ublox/ubx_proto27"]
+
+# Select U-Blox v31 protocol
+ubx31 = ["ublox/ubx_proto31"]
 
 [dependencies]
 log = "0.4"
@@ -27,7 +43,7 @@ env_logger = "0.11"
 pretty_env_logger = "0.5"
 serialport = "4.7"
 tokio = { version = "1.43", features = ["full"] }
-rinex = { version = "0.21", features = ["obs", "nav"] }
 gnss-protos = { version = "0.0.2", features = ["gps"] }
+rinex = { version = "0.21.1", features = ["obs", "nav"] }
+ublox = { version = "0.6", features = ["std", "sfrbx-gps"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
-ublox = { version = "0.6", features = ["std", "sfrbx-gps", "ubx_proto23"] }

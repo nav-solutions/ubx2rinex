@@ -11,22 +11,67 @@ UBX2RINEX
 `ubx2rinex` is a small command line utility to deserialize
 a U-Blox data stream into standardized RINEX file(s).
 
-:warning: this tool is work in progress.
-
 ## Licensing
 
-This application is part of the [nav-solutions framework](https://github.com/nav-solutions) which
-is delivered under the [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
+This application is part of the [nav-solutions framework](https://github.com/nav-solutions) and
+is licensed under [Mozilla V2 Public](https://www.mozilla.org/en-US/MPL/2.0) license.
+
+## Constellations
+
+Supported constellations: 
+
+- GPS (US)
+- Galileo (EU)
+- Glonass (RU)
+- BeiDou (CH)
+- QZSS (Japan)
+- IRNSS/NAV-IC (India)
+- SBAS
+
+## Signals
+
+Supported signals/modulations:
+
+- GPS L1 C/A
+- SBAS L1 C/A
+- QZSS L1 C/A
+- Galileo E1 (C+B)
+- Glonass L1
+- GPS L2 (M+L)
+- QZSS L2 (M+L)
+- Glonass L2
+- Galileo E5A (I+Q)
+- Galileo E5B (I+Q)
+- QZSS L5 (I+Q)
+- BDS B1i (D1+D2)
+- BDS B2i (D1+D2)
+- BDS B1C
+- BDS B2A
+- QZSS L1 S
+- IRNSS/NAV-IC L5 (A)
+
+## U-Blox protocol
+
+Supported UBX protocol versions
+
+- V14
+- V23 (Default) 
+- V27
+- V31
+
+You need to select one at least. When building with default features, you obtain the default UBX protocol.
+You cannot build this application with `--all-features` until further notice, because you can only select 
+one particular revision of the UBX protocol.
 
 ## Install from Cargo
 
-You can directly install the tool from Cargo with internet access:
+Install the latest official release from the worldwide portal directly:
 
 ```bash
 cargo install ubx2rinex
 ```
 
-## Build from sources
+# Build from sources
 
 Download the version you are interested in:
 
@@ -34,14 +79,23 @@ Download the version you are interested in:
 git clone https://github.com/nav-solutions/ubx2rinex
 ```
 
-And build it using cargo:
+Grab our test data if you're interested in the .UBX files:
+
+```bash
+git clone --recurse-submodules https://github.com/nav-solutions/ubx2rinex
+```
+
+Build the latest version with default UBX protocol:
 
 ```bash
 cargo build -r
 ```
 
-The application uses the latest `UBX` protocol supported. This may unlock full potential
-of modern devices, and does not cause issues with older firmwares, simply restricted applications.
+Build for protocol v31 specifically:
+
+```bash
+cargo build -r --no-default-features --features ubx31
+```
 
 ## Getting started
 
@@ -53,14 +107,24 @@ Connecting and operating a GNSS module requires more knowledge and involes more 
 Mostly, to configure the hardware and operate correctly. One example would be the selection
 of the desired Constellation, and navigation signals. You select this mode of operation by
 connecting to a device with `-p,--port` (mandatory).
+In active mode, you must select at least one constellation and one signal. For example, `--gps` and `--l1`.
 
 When operating in passive mode, all hardware related options no longer apply.
 You select this mode of operation by loading at least one file with `-f,--file` (mandatory).
-Passive deployment example:
+For example:
 
 ```bash
-ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --l1 --gps --bds --galileo
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz
 ```
+
+Will deserialize any data to be encountered. But you can select Constellations specifically,
+for example:
+
+```bash
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --gps
+```
+
+Will only deserialize GPS data.
 
 In any case, either `-p,--port` or `-f,--file` is required and they are mutually exclusive:
 you cannot operate in both modes at the same time.
@@ -191,12 +255,53 @@ every time a new gathering period starts.
 File name conventions
 =====================
 
-`ubx2rinex` follows and uses RINEX standard conventions. By default we will generate
-RINEX `V2` (short) filenames, as it only requires one field to be complete.
-By default, this field is set to `UBX`, but you can change that with `--name`:
+`UBX2RINEX` will generate short (V2) standardized RINEX file names by default,
+even though we generate a V3 file format by default.
 
 ```bash
-RUST_LOG=trace ubx2rinex -p /dev/ttyUSB1 --gps --name M8T
+ubx2rinex -f data/UBX/F9T-L2-5min.ubx.gz --gps
+```
+
+This is because the V3 file format is the most common and normal RINEX format.
+Yet, it is impossible to generate a valid V3 file name by default.
+
+To switch to V3 file name by default, simply use `-l,--long`, which means
+you prefer longer filenames. But to obtain a valid file name, you should specify
+a country code as well:
+
+```bash
+ubx2rinex -l --gps -c USA -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+Note that country codes are always 3 letters.
+
+The receiver model also impacts the standardized V2/V3 standardized filename.
+For example, here we emphasize that this is a F9T receiver model, and that applies
+to each standard:
+
+```bash
+ubx2rinex -m F9T --gps -c USA -f data/UBX/F9T-L2-5min.ubx.gz
+ubx2rinex -l -m F9T --gps -c USA -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+You can generate a completely custom name and not use the standard generator:
+
+```bash
+ubx2rinex -n CUSTOM --gps -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+And still take advantage of session customization, for example:
+
+```bash
+ubx2rinex -n CUSTOM -m F9T --gps -f data/UBX/F9T-L2-5min.ubx.gz
+```
+
+You can select a destination folder with `--prefix`, which applies to either
+customized or standardize names:
+
+```bash
+ubx2rinex --prefix /tmp -m F9T --gps -f data/UBX/F9T-L2-5min.ubx.gz
+ubx2rinex --prefix /tmp -n CUSTOM -m F9T --gps -f data/UBX/F9T-L2-5min.ubx.gz
 ```
 
 Signal Collection

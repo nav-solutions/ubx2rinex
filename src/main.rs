@@ -51,7 +51,7 @@ use crate::{
     device::Device,
     runtime::Runtime,
     ubx::Settings as UbloxSettings,
-    utils::to_constellation,
+    utils::{to_constellation, SignalCarrier},
 };
 
 const SBAS_PRN_OFFSET: u8 = 100;
@@ -73,6 +73,7 @@ fn consume_device(
                 // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
+
             PacketRef::RxmSfrbx(sfrbx) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
@@ -82,33 +83,42 @@ fn consume_device(
 
                     match to_constellation(gnss_id) {
                         Some(constellation) => {
-                            let mut prn = sfrbx.sv_id();
+                            // does not proceeed if we're not interested by this system
+                            if ubx_settings.constellations.contains(&constellation) {
+                                let mut prn = sfrbx.sv_id();
 
-                            if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
-                                prn -= SBAS_PRN_OFFSET;
-                            }
+                                if constellation.is_sbas() && prn >= SBAS_PRN_OFFSET {
+                                    prn -= SBAS_PRN_OFFSET;
+                                }
 
-                            let sv = SV::new(constellation, prn);
+                                let sv = SV::new(constellation, prn);
 
-                            match constellation {
-                                Constellation::GPS | Constellation::QZSS => {
-                                    // decode
-                                    if let Some(interpretation) = sfrbx.interpret() {
-                                        runtime.latch_sfrbx(sv, interpretation, cfg_precision);
-                                    } else {
+                                match constellation {
+                                    Constellation::GPS | Constellation::QZSS => {
+                                        // decode
+                                        if let Some(interpretation) = sfrbx.interpret() {
+                                            debug!(
+                                                "{} - decoded {:?}",
+                                                runtime.utc_time().round(cfg_precision),
+                                                interpretation
+                                            );
+
+                                            runtime.latch_sfrbx(sv, interpretation, cfg_precision);
+                                        } else {
+                                            error!(
+                                                "{} - SFRBX interpretation issue",
+                                                runtime.utc_time().round(cfg_precision)
+                                            );
+                                        }
+                                    },
+                                    c => {
                                         error!(
-                                            "{} - SFRBX interpretation issue",
-                                            runtime.utc_time().round(cfg_precision)
+                                            "{} - {} constellation not handled yet",
+                                            runtime.utc_time().round(cfg_precision),
+                                            c
                                         );
-                                    }
-                                },
-                                c => {
-                                    error!(
-                                        "{} - {} constellation not handled yet",
-                                        runtime.utc_time().round(cfg_precision),
-                                        c
-                                    );
-                                },
+                                    },
+                                }
                             }
                         },
                         None => {
@@ -162,7 +172,6 @@ fn consume_device(
                         let _ = meas.cp_stdev(); // LXX deviation
                         let _ = meas.do_stdev(); // DXX deviation
 
-                        // let freq_id = meas.freq_id();
                         let gnss_id = meas.gnss_id();
                         let cno = meas.cno();
 
@@ -179,7 +188,7 @@ fn consume_device(
 
                         let constell = constell.unwrap();
 
-                        // does not process if we're not interested by this system
+                        // does not proceed if we're not interested by this system
                         if ubx_settings.constellations.contains(&constell) {
                             let mut prn = meas.sv_id();
 
@@ -190,7 +199,15 @@ fn consume_device(
                             let sv = SV::new(constell, prn);
                             let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
 
-                            let rawxm = Rawxm::new(t_meas, sv, pr, cp, dop, cno);
+                            let rawxm = Rawxm {
+                                epoch: t_meas,
+                                sv,
+                                pr,
+                                cp,
+                                cno,
+                                dop,
+                                freq_id: meas.freq_id(),
+                            };
 
                             match obs_tx.try_send(Message::Measurement(rawxm)) {
                                 Ok(_) => {},
@@ -247,6 +264,7 @@ fn consume_device(
                     },
                 }
             },
+
             PacketRef::MonHw(mon_hardware) => {
                 // TODO: contributes to hardware events
                 let _ = mon_hardware.a_status();
@@ -254,6 +272,7 @@ fn consume_device(
                 // TODO: contributes to hardware events
                 let _ = mon_hardware.a_power();
             },
+
             PacketRef::NavSat(pkt) => {
                 for sv in pkt.svs() {
                     let constellation = to_constellation(sv.gnss_id());
@@ -275,8 +294,7 @@ fn consume_device(
                         prn -= SBAS_PRN_OFFSET;
                     }
 
-                    let sv = SV::new(constellation, prn);
-
+                    // let sv = SV::new(constellation, prn);
                     // flags.sv_used()
                     //flags.health();
                     //flags.quality_ind();
@@ -322,7 +340,7 @@ fn consume_device(
 
                 trace!("{} - End of Epoch", t_gpst.round(cfg_precision));
 
-                let _ = nav_tx.try_send(Message::EndofEpoch(t_gpst));
+                let _ = nav_tx.try_send(Message::EndofEpoch());
             },
 
             PacketRef::NavPvt(pkt) => {
@@ -341,13 +359,9 @@ fn consume_device(
                 }
             },
 
-            PacketRef::MgaGpsEph(_) | PacketRef::MgaGloEph(_) => {
-                // MGA-EPH uplink
-            },
-
-            PacketRef::MgaGpsIono(_) => {
-                // MGA-IONO
-            },
+            PacketRef::MgaGpsEph(_) => {},
+            PacketRef::MgaGloEph(_) => {},
+            PacketRef::MgaGpsIono(_) => {},
 
             PacketRef::NavClock(pkt) => {
                 // Do not process if user is not interested in this channel.
@@ -494,7 +508,6 @@ pub async fn main() {
     let (mut nav_tx, nav_rx) = mpsc::channel(128);
 
     let mut nav_collecter = NavCollecter::new(
-        t_utc,
         settings.clone(),
         ubx_settings.clone(),
         shutdown_rx.clone(),
@@ -533,7 +546,7 @@ pub async fn main() {
     // });
 
     // main task
-    let mut rtm = Runtime::new(t_utc);
+    let mut rtm = Runtime::new();
     info!("{} - application deployed", t_utc.round(cfg_precision));
 
     loop {
@@ -568,10 +581,20 @@ pub async fn main() {
         if ubx_settings.ephemeris {
             for (sv, pending) in rtm.pending_frames.iter() {
                 if let Some(validated) = pending.validate() {
-                    let (epoch, rinex) = validated.to_rinex();
+                    let (epoch, rinex) = validated.to_rinex(rtm.utc_time());
 
                     // redact message
-                    let _ = nav_tx.send(Message::Ephemeris((epoch, *sv, rinex)));
+                    match nav_tx.try_send(Message::Ephemeris((epoch, *sv, rinex))) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            error!(
+                                "{}({}) failed to send collected ephemeris: {}",
+                                epoch.round(cfg_precision),
+                                sv,
+                                e
+                            );
+                        },
+                    }
                 }
             }
         }
