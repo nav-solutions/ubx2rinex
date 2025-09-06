@@ -139,6 +139,7 @@ impl Collecter {
 
                         if self.deploy_epoch.is_none() {
                             self.deploy_epoch = Some(rawxm.epoch);
+
                             match self.release_header() {
                                 Ok(_) => {
                                     debug!(
@@ -177,10 +178,11 @@ impl Collecter {
                         let carrier = SignalCarrier::from_ubx(gnss_id, rawxm.freq_id);
 
                         let v2 = self.settings.major == 2;
+
                         let pr_observable = carrier.to_pseudo_range_observable(v2);
                         let cp_observable = carrier.to_phase_range_observable(v2);
                         let dop_observable = carrier.to_doppler_observable(v2);
-                        let _ = carrier.to_ssi_observable(v2);
+                        let ssi_observable = carrier.to_ssi_observable(v2);
 
                         match Observable::from_str(&pr_observable) {
                             Ok(observable) => {
@@ -232,6 +234,24 @@ impl Collecter {
                                 error!(
                                     "{} - invalid RINEX observable \"{}\"",
                                     rawxm.epoch, dop_observable
+                                );
+                            },
+                        }
+
+                        match Observable::from_str(&ssi_observable) {
+                            Ok(observable) => {
+                                self.buf.signals.push(SignalObservation {
+                                    sv: rawxm.sv,
+                                    lli: None,
+                                    snr: None,
+                                    observable,
+                                    value: rawxm.cno as f64,
+                                });
+                            },
+                            Err(_) => {
+                                error!(
+                                    "{} - invalid RINEX observable \"{}\"",
+                                    rawxm.epoch, ssi_observable
                                 );
                             },
                         }
