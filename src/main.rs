@@ -190,8 +190,6 @@ fn consume_device(
 
                         // does not proceed if we're not interested by this system
                         if ubx_settings.constellations.contains(&constell) {
-                            let carrier = SignalCarrier::from_ubx(gnss_id, meas.freq_id());
-
                             let mut prn = meas.sv_id();
 
                             if constell.is_sbas() && prn >= SBAS_PRN_OFFSET {

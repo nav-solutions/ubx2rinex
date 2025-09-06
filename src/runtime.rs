@@ -29,10 +29,6 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    pub fn first_epoch(&self) -> Epoch {
-        self.first_epoch.unwrap_or_default()
-    }
-
     pub fn epoch(&self) -> Epoch {
         self.epoch.unwrap_or_default()
     }
