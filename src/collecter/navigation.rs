@@ -1,16 +1,14 @@
 use std::{
-    collections::BTreeMap,
     collections::HashMap,
     io::{BufWriter, Write},
 };
 
-use log::{debug, error, info};
+use log::{debug, error};
 
 use rinex::{
     error::FormattingError,
-    navigation::{Ephemeris, NavFrame, NavFrameType, NavKey, NavMessageType},
+    navigation::{Ephemeris, NavMessageType},
     prelude::{Constellation, Epoch, Header, RinexType, Version, SV},
-    record::Record,
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
@@ -21,11 +19,11 @@ use crate::{
 };
 
 pub struct Collecter {
-    /// Deploy [Epoch]
-    deploy_epoch: Epoch,
+    /// First [Epoch] received from U-Blox
+    first_epoch: Option<Epoch>,
 
-    /// Current [Epoch]
-    epoch: Epoch,
+    /// Latest [Epoch] received from U-Blox
+    epoch: Option<Epoch>,
 
     /// True when Header has been released for this period
     header_released: bool,
@@ -47,12 +45,14 @@ pub struct Collecter {
 
     /// Current [FileDescriptor] handle
     fd: Option<BufWriter<FileDescriptor>>,
+
+    /// Last message released, per SV
+    latest_release: HashMap<SV, Epoch>,
 }
 
 impl Collecter {
     /// Builds new [Collecter]
     pub fn new(
-        epoch: Epoch,
         settings: Settings,
         ublox: UbloxSettings,
         shutdown: WatchRx<bool>,
@@ -64,16 +64,18 @@ impl Collecter {
             fd: None,
             shutdown,
             ubx_settings: ublox,
-            epoch: epoch,
-            deploy_epoch: epoch,
             header_released: false,
+            epoch: Default::default(),
+            first_epoch: Default::default(),
+            latest_release: Default::default(),
             header_comments: Default::default(),
         }
     }
 
     /// Obtain a new [FileDescriptor]
     fn fd(&self) -> FileDescriptor {
-        let filename = self.settings.filename(true, self.epoch);
+        let epoch = self.epoch.unwrap();
+        let filename = self.settings.filename(true, epoch);
         FileDescriptor::new(self.settings.gzip, &filename)
     }
 
@@ -92,6 +94,11 @@ impl Collecter {
                     },
 
                     Message::Ephemeris((epoch, sv, ephemeris)) => {
+                        if self.first_epoch.is_none() {
+                            self.first_epoch = Some(epoch);
+                            self.epoch = Some(epoch);
+                        }
+
                         if !self.header_released {
                             match self.release_header() {
                                 Ok(_) => {
@@ -106,16 +113,29 @@ impl Collecter {
                             self.header_released = true;
                         }
 
-                        match self.release_message(epoch, sv, ephemeris) {
-                            Ok(_) => {
-                                debug!("{}({}) - published ephemeris message", epoch, sv);
-                            },
-                            Err(e) => {
-                                error!("{} - failed to release epoch: {}", self.epoch, e);
-                            },
+                        let mut do_release = false;
+
+                        if let Some(latest) = self.latest_release.get_mut(&sv) {
+                            if (epoch - *latest) >= self.settings.nav_period {
+                                do_release = true;
+                            }
+                        } else {
+                            do_release = true;
                         }
 
-                        self.epoch = epoch;
+                        if do_release {
+                            match self.release_message(epoch, sv, ephemeris) {
+                                Ok(_) => {
+                                    self.latest_release.insert(sv, epoch); // update
+                                    debug!("{}({}) - published ephemeris message", epoch, sv);
+                                },
+                                Err(e) => {
+                                    error!("{} - failed to release epoch: {}", epoch, e);
+                                },
+                            }
+                        }
+
+                        self.epoch = Some(epoch); // update
                     },
 
                     Message::Shutdown => {
@@ -186,10 +206,10 @@ impl Collecter {
         sv: SV,
         ephemeris: Ephemeris,
     ) -> Result<(), FormattingError> {
-        let mut fd = self.fd.as_mut().unwrap();
+        let fd = self.fd.as_mut().unwrap();
 
         // write epoch
-        let (y, m, d, hh, mm, ss, nanos) = self.epoch.to_gregorian(self.epoch.time_scale);
+        let (y, m, d, hh, mm, ss, nanos) = epoch.to_gregorian(epoch.time_scale);
 
         let decis = nanos / 100_000;
 
@@ -243,6 +263,8 @@ impl Collecter {
         // format payload
         let version = Version::from_major(self.settings.major);
         ephemeris.format(fd, sv, version, NavMessageType::LNAV)?;
+
+        let _ = fd.flush();
 
         Ok(())
     }

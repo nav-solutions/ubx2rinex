@@ -1,4 +1,4 @@
-use log::{debug, error, trace};
+use log::{debug, error};
 
 use std::{
     io::{BufWriter, Write},
@@ -19,6 +19,7 @@ use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
 
 use crate::{
     collecter::{fd::FileDescriptor, settings::Settings, Message},
+    utils::{from_constellation, SignalCarrier},
     UbloxSettings,
 };
 
@@ -86,62 +87,6 @@ impl Collecter {
 
     pub async fn run(&mut self) {
         let cfg_precision = Duration::from_seconds(1.0);
-
-        // TODO: These value may differ depending on the
-        // signal band and constellation.. will not be 100% correct..
-        let c1c = if self.settings.major == 3 {
-            Observable::from_str("C1C").unwrap()
-        } else {
-            Observable::from_str("C1").unwrap()
-        };
-
-        let c2c = if self.settings.major == 3 {
-            Observable::from_str("C2C").unwrap()
-        } else {
-            Observable::from_str("C2").unwrap()
-        };
-
-        let c5c = if self.settings.major == 3 {
-            Observable::from_str("C5C").unwrap()
-        } else {
-            Observable::from_str("C5").unwrap()
-        };
-
-        let l1c = if self.settings.major == 3 {
-            Observable::from_str("L1C").unwrap()
-        } else {
-            Observable::from_str("L1").unwrap()
-        };
-
-        let l2c = if self.settings.major == 3 {
-            Observable::from_str("L2C").unwrap()
-        } else {
-            Observable::from_str("L2").unwrap()
-        };
-
-        let l5c = if self.settings.major == 3 {
-            Observable::from_str("L5C").unwrap()
-        } else {
-            Observable::from_str("L5").unwrap()
-        };
-
-        let d1c = if self.settings.major == 3 {
-            Observable::from_str("D1C").unwrap()
-        } else {
-            Observable::from_str("D1").unwrap()
-        };
-
-        let d2c = if self.settings.major == 3 {
-            Observable::from_str("D2C").unwrap()
-        } else {
-            Observable::from_str("D2").unwrap()
-        };
-
-        let d5c = if self.settings.major == 3 {
-            Observable::from_str("D5C").unwrap()
-        } else {
-            Observable::from_str("D5").unwrap()
-        };
 
         loop {
             match self.rx.recv().await {
@@ -219,29 +164,69 @@ impl Collecter {
                             }
                         }
 
-                        self.buf.signals.push(SignalObservation {
-                            sv: rawxm.sv,
-                            lli: None,
-                            snr: None,
-                            value: rawxm.cp,
-                            observable: c1c.clone(),
-                        });
+                        let gnss_id = from_constellation(&rawxm.sv.constellation);
 
-                        self.buf.signals.push(SignalObservation {
-                            sv: rawxm.sv,
-                            lli: None,
-                            snr: None,
-                            value: rawxm.pr,
-                            observable: l1c.clone(),
-                        });
+                        let carrier = SignalCarrier::from_ubx(gnss_id, rawxm.freq_id);
 
-                        self.buf.signals.push(SignalObservation {
-                            sv: rawxm.sv,
-                            lli: None,
-                            snr: None,
-                            value: rawxm.dop as f64,
-                            observable: d1c.clone(),
-                        });
+                        let v2 = self.settings.major == 2;
+                        let pr_observable = carrier.to_pseudo_range_observable(v2);
+                        let cp_observable = carrier.to_phase_range_observable(v2);
+                        let dop_observable = carrier.to_doppler_observable(v2);
+                        let _ = carrier.to_ssi_observable(v2);
+
+                        match Observable::from_str(&pr_observable) {
+                            Ok(observable) => {
+                                self.buf.signals.push(SignalObservation {
+                                    sv: rawxm.sv,
+                                    lli: None,
+                                    snr: None,
+                                    observable,
+                                    value: rawxm.pr,
+                                });
+                            },
+                            Err(_) => {
+                                error!(
+                                    "{} - invalid RINEX observable \"{}\"",
+                                    rawxm.epoch, pr_observable
+                                );
+                            },
+                        }
+
+                        match Observable::from_str(&cp_observable) {
+                            Ok(observable) => {
+                                self.buf.signals.push(SignalObservation {
+                                    sv: rawxm.sv,
+                                    lli: None,
+                                    snr: None,
+                                    observable,
+                                    value: rawxm.cp,
+                                });
+                            },
+                            Err(_) => {
+                                error!(
+                                    "{} - invalid RINEX observable \"{}\"",
+                                    rawxm.epoch, cp_observable
+                                );
+                            },
+                        }
+
+                        match Observable::from_str(&dop_observable) {
+                            Ok(observable) => {
+                                self.buf.signals.push(SignalObservation {
+                                    sv: rawxm.sv,
+                                    lli: None,
+                                    snr: None,
+                                    observable,
+                                    value: rawxm.dop as f64,
+                                });
+                            },
+                            Err(_) => {
+                                error!(
+                                    "{} - invalid RINEX observable \"{}\"",
+                                    rawxm.epoch, dop_observable
+                                );
+                            },
+                        }
 
                         self.epoch = Some(rawxm.epoch);
                     },

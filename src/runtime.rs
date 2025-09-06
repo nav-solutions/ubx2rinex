@@ -16,28 +16,32 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct Runtime {
     /// Current [Epoch]
-    pub epoch: Epoch,
+    epoch: Option<Epoch>,
 
-    /// Epoch of deployment
-    deploy_time: Epoch,
+    /// First Ublox epoch after deployment
+    first_epoch: Option<Epoch>,
 
-    /// Uptime as [Duration]
+    /// Uptime as [Duration] in terms of U-Blox epoch stream
     pub uptime: Duration,
 
-    // /// Current fix flag
-    // pub fix_flag: NavStatusFlags,
-    // /// Current nav status
-    // pub nav_status: NavStatusFlags2,
     /// [PendingFrame]s
     pub pending_frames: HashMap<SV, PendingFrame>,
 }
 
 impl Runtime {
-    pub fn new(epoch: Epoch) -> Self {
+    pub fn first_epoch(&self) -> Epoch {
+        self.first_epoch.unwrap_or_default()
+    }
+
+    pub fn epoch(&self) -> Epoch {
+        self.epoch.unwrap_or_default()
+    }
+
+    pub fn new() -> Self {
         Self {
-            epoch,
-            deploy_time: epoch,
+            epoch: Default::default(),
             uptime: Default::default(),
+            first_epoch: Default::default(),
             // fix_flag: NavStatusFlags::empty(),
             // nav_status: NavStatusFlags2::Inactive,
             pending_frames: Default::default(),
@@ -46,8 +50,11 @@ impl Runtime {
 
     /// Update latest epoch
     pub fn new_epoch(&mut self, epoch: Epoch, cfg_timescale: TimeScale) {
-        self.epoch = epoch.to_time_scale(cfg_timescale);
-        self.uptime = epoch - self.deploy_time;
+        self.epoch = Some(epoch.to_time_scale(cfg_timescale));
+
+        if let Some(first_epoch) = self.first_epoch {
+            self.uptime = epoch - first_epoch;
+        }
     }
 
     /// Latch new SFRBX interpretation
@@ -82,12 +89,12 @@ impl Runtime {
 
     /// Returns current epoch
     pub fn current_epoch(&self, timescale: TimeScale) -> Epoch {
-        self.epoch.to_time_scale(timescale)
+        self.epoch().to_time_scale(timescale)
     }
 
     /// Returns current week number in desired [TimeScale]
     pub fn current_week(&self, timescale: TimeScale) -> u32 {
-        self.epoch.to_time_scale(timescale).to_time_of_week().0
+        self.epoch().to_time_scale(timescale).to_time_of_week().0
     }
 
     // /// Returns current epoch in [TimeScale::GPST]

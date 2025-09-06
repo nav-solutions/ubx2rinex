@@ -187,7 +187,8 @@ Other example, half hour period: --period \"30 mins\".")
                             .long("v2")
                             .action(ArgAction::SetTrue)
                             .help("Downgrade RINEX revision to V2. You can also upgrade to RINEX V4 with --v4.
-We use V3 by default, because very few tools support V4 properly to this day.")
+We use V3 by default, because very few tools support V4 properly to this day.
+You should not use --v2 with multi band devices (>M8).")
                     )
                     .arg(
                         Arg::new("v4")
@@ -674,13 +675,17 @@ This is currently limited to the Navigation message collection and does not impa
             } else {
                 "UBXR".to_string()
             },
-            period: if let Some(period) = self.matches.get_one::<Duration>("period") {
-                *period
+            period: if let Some(period) = self.matches.get_one::<String>("period") {
+                period.trim().parse::<Duration>().unwrap_or_else(|e| {
+                    panic!("not a valid duration: {}", e);
+                })
             } else {
                 Duration::from_hours(1.0)
             },
-            nav_period: if let Some(period) = self.matches.get_one::<Duration>("nav-period") {
-                *period
+            nav_period: if let Some(period) = self.matches.get_one::<String>("nav-period") {
+                period.trim().parse::<Duration>().unwrap_or_else(|e| {
+                    panic!("not a valid duration: {}", e);
+                })
             } else {
                 Duration::from_hours(2.0)
             },

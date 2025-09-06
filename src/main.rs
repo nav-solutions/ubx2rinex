@@ -51,7 +51,7 @@ use crate::{
     device::Device,
     runtime::Runtime,
     ubx::Settings as UbloxSettings,
-    utils::to_constellation,
+    utils::{to_constellation, SignalCarrier},
 };
 
 const SBAS_PRN_OFFSET: u8 = 100;
@@ -172,8 +172,6 @@ fn consume_device(
                         let _ = meas.cp_stdev(); // LXX deviation
                         let _ = meas.do_stdev(); // DXX deviation
 
-                        let freq_id = meas.freq_id();
-
                         let gnss_id = meas.gnss_id();
                         let cno = meas.cno();
 
@@ -192,6 +190,8 @@ fn consume_device(
 
                         // does not proceed if we're not interested by this system
                         if ubx_settings.constellations.contains(&constell) {
+                            let carrier = SignalCarrier::from_ubx(gnss_id, meas.freq_id());
+
                             let mut prn = meas.sv_id();
 
                             if constell.is_sbas() && prn >= SBAS_PRN_OFFSET {
@@ -201,7 +201,15 @@ fn consume_device(
                             let sv = SV::new(constell, prn);
                             let t_meas = t_gpst.to_time_scale(ubx_settings.timescale);
 
-                            let rawxm = Rawxm::new(t_meas, sv, pr, cp, dop, cno);
+                            let rawxm = Rawxm {
+                                epoch: t_meas,
+                                sv,
+                                pr,
+                                cp,
+                                cno,
+                                dop,
+                                freq_id: meas.freq_id(),
+                            };
 
                             match obs_tx.try_send(Message::Measurement(rawxm)) {
                                 Ok(_) => {},
@@ -288,8 +296,7 @@ fn consume_device(
                         prn -= SBAS_PRN_OFFSET;
                     }
 
-                    let sv = SV::new(constellation, prn);
-
+                    // let sv = SV::new(constellation, prn);
                     // flags.sv_used()
                     //flags.health();
                     //flags.quality_ind();
@@ -503,7 +510,6 @@ pub async fn main() {
     let (mut nav_tx, nav_rx) = mpsc::channel(128);
 
     let mut nav_collecter = NavCollecter::new(
-        t_utc,
         settings.clone(),
         ubx_settings.clone(),
         shutdown_rx.clone(),
@@ -542,7 +548,7 @@ pub async fn main() {
     // });
 
     // main task
-    let mut rtm = Runtime::new(t_utc);
+    let mut rtm = Runtime::new();
     info!("{} - application deployed", t_utc.round(cfg_precision));
 
     loop {
