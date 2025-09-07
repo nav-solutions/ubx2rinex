@@ -91,7 +91,7 @@ Build the latest version with default UBX protocol:
 cargo build -r
 ```
 
-Build for protocol v31 specifically:
+Example: build for protocol v31 specifically
 
 ```bash
 cargo build -r --no-default-features --features ubx31
