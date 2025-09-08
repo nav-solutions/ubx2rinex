@@ -45,5 +45,5 @@ serialport = "4.7"
 tokio = { version = "1.43", features = ["full"] }
 gnss-protos = { version = "0.0.2", features = ["gps"] }
 rinex = { version = "0.21.1", features = ["obs", "nav"] }
-ublox = { version = "0.6", features = ["std", "sfrbx-gps"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
+ublox = { version = "0.6", default-features = false, features = ["std", "sfrbx-gps"] }

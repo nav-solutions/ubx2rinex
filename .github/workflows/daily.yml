@@ -26,8 +26,17 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y libudev-dev
     
-    - uses: actions-rs/cargo@v1
-      name: Build (Default)
-      with:
-        command: build
-        args: -r
+    - name: Build (Default)
+      run: cargo build
+    
+    - name: Build (UBX14)
+      run: cargo build --no-default-features --features ubx14
+    
+    - name: Build (UBX23)
+      run: cargo build --no-default-features --features ubx23
+    
+    - name: Build (UBX27)
+      run: cargo build --no-default-features --features ubx27
+    
+    - name: Build (UBX31)
+      run: cargo build --no-default-features --features ubx31
