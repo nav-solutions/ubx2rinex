@@ -47,5 +47,5 @@ gnss-rs = "2.5"
 serialport = "4.7"
 env_logger = "0.11"
 pretty_env_logger = "0.5"
-tokio = { version = "1.43", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
