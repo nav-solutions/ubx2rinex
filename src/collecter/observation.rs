@@ -11,17 +11,17 @@ use rinex::{
     hatanaka::Compressor,
     observation::{ClockObservation, HeaderFields as ObsHeader, SNR},
     prelude::{
+        CRINEX, Constellation, Epoch, Header, Observable, RinexType,
         obs::{EpochFlag, ObsKey, Observations, SignalObservation},
-        Constellation, Epoch, Header, Observable, RinexType, CRINEX,
     },
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
 
 use crate::{
-    collecter::{fd::FileDescriptor, settings::Settings, Message},
-    utils::{from_constellation, SignalCarrier},
     UbloxSettings,
+    collecter::{Message, fd::FileDescriptor, settings::Settings},
+    utils::{SignalCarrier, from_constellation},
 };
 
 use hifitime::prelude::Duration;

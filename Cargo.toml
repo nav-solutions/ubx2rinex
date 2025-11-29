@@ -15,20 +15,11 @@ exclude = [
 ]
 
 [features]
-# U-Blox v23 by default
-default = ["ublox/ubx_proto23"]
-
-# Select U-Blox v14 protocol
-ubx14 = ["ublox/ubx_proto14"]
-
-# Select U-Blox v23 protocol
-ubx23 = ["ublox/ubx_proto23"]
-
-# Select U-Blox v27 protocol
-ubx27 = ["ublox/ubx_proto27"]
-
-# Select U-Blox v31 protocol
-ubx31 = ["ublox/ubx_proto31"]
+default = ["proto23", "ublox/ubx_proto23"] # UBX V23
+proto14 = ["ublox/ubx_proto14"] # UBX V14
+proto23 = ["ublox/ubx_proto23"] # UBX V23
+proto27 = ["ublox/ubx_proto27"] # UBX V27
+proto31 = ["ublox/ubx_proto31"] # UBX V31
 
 [dependencies.rinex]
 git = "https://github.com/nav-solutions/rinex"

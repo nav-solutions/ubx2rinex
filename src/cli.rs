@@ -2,9 +2,9 @@ use clap::{Arg, ArgAction, ArgMatches, ColorChoice, Command};
 use rinex::prelude::{Constellation, Duration, Observable, TimeScale};
 
 use crate::{
+    UbloxSettings,
     collecter::settings::{HealthMask, Settings as RinexSettings},
     utils::SignalCarrier,
-    UbloxSettings,
 };
 
 use std::{collections::HashMap, str::FromStr};

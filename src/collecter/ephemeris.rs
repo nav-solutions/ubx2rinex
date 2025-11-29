@@ -4,7 +4,7 @@ use gnss_protos::{
     GpsQzssFrame, GpsQzssFrame1, GpsQzssFrame2, GpsQzssFrame3, GpsQzssHow, GpsQzssSubframe,
 };
 
-use ublox::RxmSfrbxInterpreted;
+use ublox::rxm_sfrbx::RxmSfrbxInterpreted;
 
 use rinex::navigation::{Ephemeris as RINEX, OrbitItem};
 

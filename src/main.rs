@@ -18,6 +18,18 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
+#[cfg(feature = "proto23")]
+pub(crate) type Proto = ublox_device::ublox::proto23::Proto23;
+
+#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+pub(crate) type Proto = ublox_device::ublox::proto27::Proto27;
+
+#[cfg(all(
+    feature = "proto31",
+    not(any(feature = "proto23", feature = "proto27"))
+))]
+pub(crate) type Proto = ublox_device::ublox::proto31::Proto31;
+
 use itertools::Itertools;
 
 use env_logger::{Builder, Target};
@@ -31,9 +43,21 @@ use tokio::{
 
 use std::fs::File;
 
-use rinex::prelude::{Constellation, Duration, Epoch, TimeScale, SV};
+use rinex::prelude::{Constellation, Duration, Epoch, SV, TimeScale};
 
-use ublox::{NavTimeUtcFlags, PacketRef, RecStatFlags};
+use ublox::{nav_time_utc::NavTimeUtcFlags, rxm_rawx::RecStatFlags};
+
+#[cfg(feature = "proto23")]
+use ublox::packetref_proto23::PacketRef;
+
+#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+use ublox::packetref_proto27::PacketRef;
+
+#[cfg(all(
+    feature = "proto31",
+    not(any(feature = "proto23", feature = "proto27"))
+))]
+use ublox::packetref_proto31::PacketRef;
 
 mod cli;
 mod collecter;
@@ -45,8 +69,8 @@ mod utils;
 use crate::{
     cli::Cli,
     collecter::{
-        navigation::Collecter as NavCollecter, observation::Collecter as ObsCollecter,
-        rawxm::Rawxm, Message,
+        Message, navigation::Collecter as NavCollecter, observation::Collecter as ObsCollecter,
+        rawxm::Rawxm,
     },
     device::Device,
     runtime::Runtime,
@@ -457,7 +481,7 @@ pub async fn main() {
     let mut device = if let Some(serial) = cli.serial_port() {
         // active mode (GNSS module)
         let baud_rate = cli.baud_rate().unwrap_or(115_200);
-        Device::open_serial_port(serial, baud_rate, &mut buffer)
+        Device::open_serial_port::<Proto>(serial, baud_rate, &mut buffer)
     } else {
         // passive mode (input files)
         let user_files = cli.filepaths();

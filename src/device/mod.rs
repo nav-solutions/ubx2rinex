@@ -1,11 +1,41 @@
 use log::{debug, error};
 
 use ublox::{
-    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
-    OutProtoMask, PacketRef, Parity, Parser, RxmRawx, RxmSfrbx, StopBits, UartMode, UartPortId,
-    UbxPacketMeta, UbxPacketRequest,
+    Parser, UbxPacketMeta, UbxPacketRequest, UbxProtocol,
+    cfg_msg::{CfgMsgAllPorts, CfgMsgAllPortsBuilder},
+    cfg_prt::{
+        CfgPrtUart, CfgPrtUartBuilder, DataBits, InProtoMask, OutProtoMask, Parity, StopBits,
+        UartMode, UartPortId,
+    },
+    cfg_rate::{AlignmentToReferenceTime, CfgRate, CfgRateBuilder},
+    mon_ver::MonVer,
+    nav_clock::NavClock,
+    nav_other::NavEoe,
+    nav_sat::NavSat,
+    rxm_rawx::RxmRawx,
+    rxm_sfrbx::RxmSfrbx,
 };
+
+#[cfg(feature = "proto23")]
+use ublox::packetref_proto23::PacketRef;
+
+#[cfg(feature = "proto23")]
+use ublox::nav_pvt::proto23::NavPvt;
+
+#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+use ublox::packetref_proto27::PacketRef;
+
+#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+use ublox::nav_pvt::proto27::NavPvt;
+
+#[cfg(all(
+    feature = "proto31",
+    not(any(feature = "proto23", feature = "proto27"))
+))]
+use ublox::packetref_proto31::PacketRef;
+
+#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+use ublox::nav_pvt::proto31::NavPvt;
 
 mod interface;
 
@@ -17,16 +47,16 @@ use std::{
     time::Duration,
 };
 
-use crate::{collecter::Message, utils::from_timescale, UbloxSettings};
+use crate::{UbloxSettings, collecter::Message, utils::from_timescale};
 
 use tokio::sync::mpsc::Sender;
 
-pub struct Device {
+pub struct Device<P: UbxProtocol> {
     pub interface: Interface,
-    pub parser: Parser<Vec<u8>>,
+    pub parser: Parser<Vec<u8>, P>,
 }
 
-impl Device {
+impl<P: UbxProtocol> Device<P> {
     pub fn configure(&mut self, settings: &UbloxSettings, buf: &mut [u8], tx: Sender<Message>) {
         let mut vec = Vec::with_capacity(1024);
 
@@ -77,7 +107,7 @@ impl Device {
             .unwrap_or_else(|e| panic!("Failed to open {} port: {}", port_str, e));
 
         let mut device = Self {
-            parser: Default::default(),
+            parser: Parser::<_, P>::default(),
             interface: Interface::from_serial_port(port),
         };
 
