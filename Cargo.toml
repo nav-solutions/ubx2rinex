@@ -8,7 +8,7 @@ homepage = "https://github.com/nav-solutions"
 repository = "https://github.com/nav-solutions/ubx2rinex"
 keywords = ["gnss", "gps", "geo"]
 categories = ["science", "science::geo", "command-line-interface", "command-line-utilities"]
-edition = "2021"
+edition = "2024"
 readme = "README.md"
 exclude = [
     "data/*",
@@ -30,6 +30,20 @@ ubx27 = ["ublox/ubx_proto27"]
 # Select U-Blox v31 protocol
 ubx31 = ["ublox/ubx_proto31"]
 
+[dependencies.rinex]
+git = "https://github.com/nav-solutions/rinex"
+rev = "eebd7c0de6e9b3f77cd909a70c76765e8ddc4516"
+features = ["obs", "nav"]
+
+[dependencies.ublox]
+version = "0.8"
+features = ["std", "sfrbx-gps"]
+default-features = false
+
+[dependencies.gnss-protos]
+version = "0.0.2"
+features = ["gps"]
+
 [dependencies]
 log = "0.4"
 flate2 = "1"
@@ -37,13 +51,10 @@ serde = "1"
 serde_json = "1"
 thiserror = "2"
 itertools = "0.14"
-hifitime = "4.1" 
-gnss-rs = "2.4"
+hifitime = "4" 
+gnss-rs = "2.5"
+serialport = "4.7"
 env_logger = "0.11"
 pretty_env_logger = "0.5"
-serialport = "4.7"
 tokio = { version = "1.43", features = ["full"] }
-gnss-protos = { version = "0.0.2", features = ["gps"] }
-rinex = { version = "0.21.1", features = ["obs", "nav"] }
 clap = { version = "4.4.10", features = ["derive", "color"] }
-ublox = { version = "0.6", default-features = false, features = ["std", "sfrbx-gps"] }
