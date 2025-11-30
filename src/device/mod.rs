@@ -1,7 +1,7 @@
 use log::{debug, error};
 
 use ublox::{
-    Parser, UbxPacketMeta, UbxPacketRequest, UbxProtocol,
+    Parser, UbxPacket, UbxPacketMeta, UbxPacketRequest, UbxProtocol,
     cfg_msg::{CfgMsgAllPorts, CfgMsgAllPortsBuilder},
     cfg_prt::{
         CfgPrtUart, CfgPrtUartBuilder, DataBits, InProtoMask, OutProtoMask, Parity, StopBits,
@@ -160,7 +160,7 @@ impl<P: UbxProtocol> Device<P> {
     /// - Ok(0) once all packets were consumed (no packet present)
     /// - Ok(n) with n=number of packets that were consumed (not bytes)
     /// - Err(e) on I/O error
-    pub fn consume_all_cb<T: FnMut(PacketRef)>(
+    pub fn consume_all_cb<T: FnMut(UbxPacket)>(
         &mut self,
         buffer: &mut [u8],
         mut cb: T,
