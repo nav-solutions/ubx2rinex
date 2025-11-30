@@ -4,6 +4,7 @@ UBX2RINEX
 [![Rust](https://github.com/nav-solutions/ubx2rinex/actions/workflows/rust.yml/badge.svg)](https://github.com/nav-solutions/ubx2rinex/actions/workflows/rust.yml)
 [![Rust](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml/badge.svg)](https://github.com/nav-solutions/ubx2rinex/actions/workflows/daily.yml)
 [![crates.io](https://img.shields.io/crates/v/ubx2rinex.svg)](https://crates.io/crates/ubx2rinex)
+[![discord server](https://img.shields.io/discord/1342922474110586910?logo=discord)](https://discord.gg/EqhEBXBmJh)
 
 [![MRSV](https://img.shields.io/badge/MSRV-1.82.0-orange?style=for-the-badge)](https://github.com/rust-lang/rust/releases/tag/1.82.0)
 [![License](https://img.shields.io/badge/license-MPL_2.0-orange?style=for-the-badge&logo=mozilla)](https://github.com/nav-solutions/ubx2rinex/blob/main/LICENSE)
