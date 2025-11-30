@@ -8,14 +8,14 @@ use log::{debug, error};
 use rinex::{
     error::FormattingError,
     navigation::{Ephemeris, NavMessageType},
-    prelude::{Constellation, Epoch, Header, RinexType, Version, SV},
+    prelude::{Constellation, Epoch, Header, RinexType, SV, Version},
 };
 
 use tokio::{sync::mpsc::Receiver as Rx, sync::watch::Receiver as WatchRx};
 
 use crate::{
-    collecter::{fd::FileDescriptor, settings::Settings, Message},
     UbloxSettings,
+    collecter::{Message, fd::FileDescriptor, settings::Settings},
 };
 
 pub struct Collecter {

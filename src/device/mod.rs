@@ -1,15 +1,38 @@
 use log::{debug, error};
 
 use ublox::{
-    AlignmentToReferenceTime, CfgMsgAllPorts, CfgMsgAllPortsBuilder, CfgPrtUart, CfgPrtUartBuilder,
-    CfgRate, CfgRateBuilder, DataBits, InProtoMask, MonVer, NavClock, NavEoe, NavPvt, NavSat,
-    OutProtoMask, PacketRef, Parity, Parser, RxmRawx, RxmSfrbx, StopBits, UartMode, UartPortId,
-    UbxPacketMeta, UbxPacketRequest,
+    Parser, UbxPacket, UbxPacketMeta, UbxPacketRequest, UbxProtocol,
+    cfg_msg::{CfgMsgAllPorts, CfgMsgAllPortsBuilder},
+    cfg_prt::{
+        CfgPrtUart, CfgPrtUartBuilder, DataBits, InProtoMask, OutProtoMask, Parity, StopBits,
+        UartMode, UartPortId,
+    },
+    cfg_rate::{AlignmentToReferenceTime, CfgRate, CfgRateBuilder},
+    mon_ver::MonVer,
+    nav_clock::NavClock,
+    nav_other::NavEoe,
+    nav_sat::NavSat,
+    rxm_rawx::RxmRawx,
+    rxm_sfrbx::RxmSfrbx,
 };
 
-mod interface;
+#[cfg(feature = "ubx14")]
+use ublox::packetref_proto14::PacketRef;
+#[cfg(feature = "ubx23")]
+use ublox::packetref_proto23::PacketRef;
+#[cfg(feature = "ubx27")]
+use ublox::packetref_proto27::PacketRef;
+#[cfg(feature = "ubx31")]
+use ublox::packetref_proto31::PacketRef;
 
-use interface::Interface;
+#[cfg(feature = "ubx14")]
+use ublox::nav_pvt::proto14::NavPvt;
+#[cfg(feature = "ubx23")]
+use ublox::nav_pvt::proto23::NavPvt;
+#[cfg(any(feature = "ubx27", feature = "ubx31"))]
+use ublox::nav_pvt::proto27_31::NavPvt;
+
+mod interface;
 
 use std::{
     fs::File,
@@ -17,16 +40,17 @@ use std::{
     time::Duration,
 };
 
-use crate::{collecter::Message, utils::from_timescale, UbloxSettings};
+use crate::{UbloxSettings, collecter::Message, utils::from_timescale};
+use interface::Interface;
 
 use tokio::sync::mpsc::Sender;
 
-pub struct Device {
+pub struct Device<P: UbxProtocol> {
     pub interface: Interface,
-    pub parser: Parser<Vec<u8>>,
+    pub parser: Parser<Vec<u8>, P>,
 }
 
-impl Device {
+impl<P: UbxProtocol> Device<P> {
     pub fn configure(&mut self, settings: &UbloxSettings, buf: &mut [u8], tx: Sender<Message>) {
         let mut vec = Vec::with_capacity(1024);
 
@@ -60,7 +84,7 @@ impl Device {
         });
 
         Self {
-            parser: Default::default(),
+            parser: Parser::<_, P>::new(vec![]),
             interface: if fullpath.ends_with(".gz") {
                 Interface::from_gzip_file_handle(handle)
             } else {
@@ -77,7 +101,7 @@ impl Device {
             .unwrap_or_else(|e| panic!("Failed to open {} port: {}", port_str, e));
 
         let mut device = Self {
-            parser: Default::default(),
+            parser: Parser::<_, P>::new(vec![]),
             interface: Interface::from_serial_port(port),
         };
 
@@ -130,7 +154,7 @@ impl Device {
     /// - Ok(0) once all packets were consumed (no packet present)
     /// - Ok(n) with n=number of packets that were consumed (not bytes)
     /// - Err(e) on I/O error
-    pub fn consume_all_cb<T: FnMut(PacketRef)>(
+    pub fn consume_all_cb<T: FnMut(UbxPacket)>(
         &mut self,
         buffer: &mut [u8],
         mut cb: T,
@@ -169,7 +193,29 @@ impl Device {
         let mut found_packet = false;
         while !found_packet {
             self.consume_all_cb(buffer, |packet| {
-                if let PacketRef::AckAck(ack) = packet {
+                #[cfg(feature = "ubx14")]
+                if let ublox::UbxPacket::Proto14(PacketRef::AckAck(ack)) = packet {
+                    if ack.class() == T::CLASS && ack.msg_id() == T::ID {
+                        found_packet = true;
+                    }
+                }
+
+                #[cfg(feature = "ubx23")]
+                if let ublox::UbxPacket::Proto23(PacketRef::AckAck(ack)) = packet {
+                    if ack.class() == T::CLASS && ack.msg_id() == T::ID {
+                        found_packet = true;
+                    }
+                }
+
+                #[cfg(feature = "ubx27")]
+                if let ublox::UbxPacket::Proto27(PacketRef::AckAck(ack)) = packet {
+                    if ack.class() == T::CLASS && ack.msg_id() == T::ID {
+                        found_packet = true;
+                    }
+                }
+
+                #[cfg(feature = "ubx31")]
+                if let ublox::UbxPacket::Proto31(PacketRef::AckAck(ack)) = packet {
                     if ack.class() == T::CLASS && ack.msg_id() == T::ID {
                         found_packet = true;
                     }
@@ -209,7 +255,50 @@ impl Device {
 
         while !packet_found {
             self.consume_all_cb(buffer, |packet| {
-                if let PacketRef::MonVer(pkt) = packet {
+                #[cfg(feature = "ubx14")]
+                if let ublox::UbxPacket::Proto14(PacketRef::MonVer(pkt)) = packet {
+                    let firmware = pkt.hardware_version();
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
+                    packet_found = true;
+                }
+
+                #[cfg(feature = "ubx23")]
+                if let ublox::UbxPacket::Proto23(PacketRef::MonVer(pkt)) = packet {
+                    let firmware = pkt.hardware_version();
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
+                    packet_found = true;
+                }
+
+                #[cfg(feature = "ubx27")]
+                if let ublox::UbxPacket::Proto27(PacketRef::MonVer(pkt)) = packet {
+                    let firmware = pkt.hardware_version();
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
+                    packet_found = true;
+                }
+
+                #[cfg(feature = "ubx31")]
+                if let ublox::UbxPacket::Proto31(PacketRef::MonVer(pkt)) = packet {
                     let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());
                     debug!("U-Blox Firmware version: {}", firmware);

@@ -1,4 +1,4 @@
-use ublox::AlignmentToReferenceTime;
+use ublox::cfg_rate::AlignmentToReferenceTime;
 
 use rinex::prelude::{Constellation, TimeScale};
 

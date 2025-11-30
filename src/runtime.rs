@@ -4,7 +4,7 @@ use log::trace;
 use ublox::{
     // NavStatusFlags,
     // NavStatusFlags2,
-    RxmSfrbxInterpreted,
+    rxm_sfrbx::RxmSfrbxInterpreted,
 };
 
 use rinex::prelude::{Constellation, SV};

@@ -1,4 +1,4 @@
-use flate2::{write::GzEncoder, Compression};
+use flate2::{Compression, write::GzEncoder};
 use std::fs::File;
 
 pub enum FileDescriptor {
