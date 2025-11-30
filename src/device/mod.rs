@@ -16,25 +16,22 @@ use ublox::{
     rxm_sfrbx::RxmSfrbx,
 };
 
-#[cfg(feature = "proto23")]
+#[cfg(feature = "ubx23")]
 use ublox::packetref_proto23::PacketRef;
 
-#[cfg(feature = "proto23")]
+#[cfg(feature = "ubx23")]
 use ublox::nav_pvt::proto23::NavPvt;
 
-#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
 use ublox::packetref_proto27::PacketRef;
 
-#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
 use ublox::nav_pvt::proto27::NavPvt;
 
-#[cfg(all(
-    feature = "proto31",
-    not(any(feature = "proto23", feature = "proto27"))
-))]
+#[cfg(all(feature = "ubx31", not(any(feature = "ubx23", feature = "ubx27"))))]
 use ublox::packetref_proto31::PacketRef;
 
-#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
 use ublox::nav_pvt::proto31::NavPvt;
 
 mod interface;
@@ -199,21 +196,21 @@ impl<P: UbxProtocol> Device<P> {
         let mut found_packet = false;
         while !found_packet {
             self.consume_all_cb(buffer, |packet| {
-                #[cfg(feature = "proto23")]
+                #[cfg(feature = "ubx23")]
                 if let ublox::UbxPacket::Proto23(PacketRef::AckAck(ack)) = packet {
                     if ack.class() == T::CLASS && ack.msg_id() == T::ID {
                         found_packet = true;
                     }
                 }
 
-                #[cfg(feature = "proto27")]
+                #[cfg(feature = "ubx27")]
                 if let ublox::UbxPacket::Proto27(PacketRef::AckAck(ack)) = packet {
                     if ack.class() == T::CLASS && ack.msg_id() == T::ID {
                         found_packet = true;
                     }
                 }
 
-                #[cfg(feature = "proto31")]
+                #[cfg(feature = "ubx31")]
                 if let ublox::UbxPacket::Proto31(PacketRef::AckAck(ack)) = packet {
                     if ack.class() == T::CLASS && ack.msg_id() == T::ID {
                         found_packet = true;
@@ -254,7 +251,7 @@ impl<P: UbxProtocol> Device<P> {
 
         while !packet_found {
             self.consume_all_cb(buffer, |packet| {
-                #[cfg(feature = "proto23")]
+                #[cfg(feature = "ubx23")]
                 if let ublox::UbxPacket::Proto23(PacketRef::MonVer(pkt)) = packet {
                     let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());
@@ -268,7 +265,7 @@ impl<P: UbxProtocol> Device<P> {
                     packet_found = true;
                 }
 
-                #[cfg(feature = "proto27")]
+                #[cfg(feature = "ubx27")]
                 if let ublox::UbxPacket::Proto27(PacketRef::MonVer(pkt)) = packet {
                     let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());
@@ -282,7 +279,7 @@ impl<P: UbxProtocol> Device<P> {
                     packet_found = true;
                 }
 
-                #[cfg(feature = "proto31")]
+                #[cfg(feature = "ubx31")]
                 if let ublox::UbxPacket::Proto31(PacketRef::MonVer(pkt)) = packet {
                     let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());

@@ -15,11 +15,11 @@ exclude = [
 ]
 
 [features]
-default = ["proto23", "ublox/ubx_proto23"] # UBX V23
-proto14 = ["ublox/ubx_proto14"] # UBX V14
-proto23 = ["ublox/ubx_proto23"] # UBX V23
-proto27 = ["ublox/ubx_proto27"] # UBX V27
-proto31 = ["ublox/ubx_proto31"] # UBX V31
+default = ["ubx23", "ublox/ubx_proto23"] # UBX V23
+ubx14 = ["ublox/ubx_proto14"] # UBX V14
+ubx23 = ["ublox/ubx_proto23"] # UBX V23
+ubx27 = ["ublox/ubx_proto27"] # UBX V27
+ubx31 = ["ublox/ubx_proto31"] # UBX V31
 
 [dependencies.rinex]
 git = "https://github.com/nav-solutions/rinex"

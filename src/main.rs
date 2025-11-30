@@ -18,16 +18,13 @@
 extern crate gnss_rs as gnss;
 extern crate ublox;
 
-#[cfg(feature = "proto23")]
+#[cfg(feature = "ubx23")]
 pub(crate) type Proto = ublox::proto23::Proto23;
 
-#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
 pub(crate) type Proto = ublox::proto27::Proto27;
 
-#[cfg(all(
-    feature = "proto31",
-    not(any(feature = "proto23", feature = "proto27"))
-))]
+#[cfg(all(feature = "ubx31", not(any(feature = "ubx23", feature = "ubx27"))))]
 pub(crate) type Proto = ublox::proto31::Proto31;
 
 use itertools::Itertools;
@@ -50,16 +47,13 @@ use ublox::{
     rxm_rawx::RecStatFlags,
 };
 
-#[cfg(feature = "proto23")]
+#[cfg(feature = "ubx23")]
 use ublox::packetref_proto23::PacketRef;
 
-#[cfg(all(feature = "proto27", not(feature = "proto23")))]
+#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
 use ublox::packetref_proto27::PacketRef;
 
-#[cfg(all(
-    feature = "proto31",
-    not(any(feature = "proto23", feature = "proto27"))
-))]
+#[cfg(all(feature = "ubx31", not(any(feature = "ubx23", feature = "ubx27"))))]
 use ublox::packetref_proto31::PacketRef;
 
 mod cli;
@@ -96,26 +90,26 @@ fn consume_device(
 
     device.consume_all_cb(buffer, |packet| {
         match packet {
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::CfgNav5(_)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::CfgNav5(_)) => {
                 // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::CfgNav5(_)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::CfgNav5(_)) => {
                 // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::CfgNav5(_)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::CfgNav5(_)) => {
                 // TODO: Dynamic model ?
                 // let _dyn_model = pkt.dyn_model();
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::RxmSfrbx(sfrbx)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::RxmSfrbx(sfrbx)) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
                 // But this may arise in passive mode.
@@ -173,8 +167,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::RxmSfrbx(sfrbx)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::RxmSfrbx(sfrbx)) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
                 // But this may arise in passive mode.
@@ -232,8 +226,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::RxmSfrbx(sfrbx)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::RxmSfrbx(sfrbx)) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
                 // But this may arise in passive mode.
@@ -291,8 +285,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::RxmRawx(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::RxmRawx(pkt)) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
                 // But this may arise in passive mode.
@@ -385,8 +379,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::RxmRawx(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::RxmRawx(pkt)) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
                 // But this may arise in passive mode.
@@ -479,8 +473,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::RxmRawx(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::RxmRawx(pkt)) => {
                 // Do not process if user is not interested in this channel.
                 // When attached to hardware this naturally never happens.
                 // But this may arise in passive mode.
@@ -573,8 +567,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::MonVer(mon_version)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::MonVer(mon_version)) => {
                 let software_version = mon_version.software_version().to_string();
 
                 match obs_tx.try_send(Message::FirmwareVersion(software_version)) {
@@ -615,8 +609,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::MonVer(mon_version)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::MonVer(mon_version)) => {
                 let software_version = mon_version.software_version().to_string();
 
                 match obs_tx.try_send(Message::FirmwareVersion(software_version)) {
@@ -657,8 +651,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::MonVer(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::MonVer(pkt)) => {
                 let software_version = mon_version.software_version().to_string();
 
                 match obs_tx.try_send(Message::FirmwareVersion(software_version)) {
@@ -699,29 +693,29 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::MonHw(mon_hardware)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::MonHw(mon_hardware)) => {
                 // TODO: should contribute to hardware events
                 let _ = mon_hardware.a_status();
                 let _ = mon_hardware.a_power();
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::MonHw(mon_hardware)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::MonHw(mon_hardware)) => {
                 // TODO: should contribute to hardware events
                 let _ = mon_hardware.a_status();
                 let _ = mon_hardware.a_power();
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::MonHw(mon_hardware)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::MonHw(mon_hardware)) => {
                 // TODO: should contribute to hardware events
                 let _ = mon_hardware.a_status();
                 let _ = mon_hardware.a_power();
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::NavSat(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::NavSat(pkt)) => {
                 for sv in pkt.svs() {
                     let constellation = to_constellation(sv.gnss_id());
 
@@ -751,8 +745,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::NavSat(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::NavSat(pkt)) => {
                 for sv in pkt.svs() {
                     let constellation = to_constellation(sv.gnss_id());
 
@@ -782,8 +776,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::NavSat(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::NavSat(pkt)) => {
                 for sv in pkt.svs() {
                     let constellation = to_constellation(sv.gnss_id());
 
@@ -813,8 +807,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::NavTimeUTC(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::NavTimeUTC(pkt)) => {
                 if pkt.valid().intersects(NavTimeUtcFlags::VALID_UTC) {
                     // leap seconds already known
                     // let e = Epoch::maybe_from_gregorian(
@@ -830,8 +824,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::NavTimeUTC(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::NavTimeUTC(pkt)) => {
                 if pkt.valid().intersects(NavTimeUtcFlags::VALID_UTC) {
                     // leap seconds already known
                     // let e = Epoch::maybe_from_gregorian(
@@ -847,8 +841,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::NavTimeUTC(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::NavTimeUTC(pkt)) => {
                 if pkt.valid().intersects(NavTimeUtcFlags::VALID_UTC) {
                     // leap seconds already known
                     // let e = Epoch::maybe_from_gregorian(
@@ -864,8 +858,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::NavStatus(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::NavStatus(pkt)) => {
                 //itow = pkt.itow();
                 runtime.uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
 
@@ -879,8 +873,8 @@ fn consume_device(
                 trace!("Uptime: {}", runtime.uptime);
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::NavStatus(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::NavStatus(pkt)) => {
                 //itow = pkt.itow();
                 runtime.uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
 
@@ -894,8 +888,8 @@ fn consume_device(
                 trace!("Uptime: {}", runtime.uptime);
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::NavStatus(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::NavStatus(pkt)) => {
                 //itow = pkt.itow();
                 runtime.uptime = Duration::from_milliseconds(pkt.uptime_ms() as f64);
 
@@ -909,8 +903,8 @@ fn consume_device(
                 trace!("Uptime: {}", runtime.uptime);
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::NavEoe(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::NavEoe(pkt)) => {
                 let gpst_itow_nanos = pkt.itow() as u64 * 1_000_000;
                 let t_gpst =
                     Epoch::from_time_of_week(runtime.gpst_week(), gpst_itow_nanos, TimeScale::GPST);
@@ -919,8 +913,8 @@ fn consume_device(
                 let _ = nav_tx.try_send(Message::EndofEpoch());
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::NavEoe(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::NavEoe(pkt)) => {
                 let gpst_itow_nanos = pkt.itow() as u64 * 1_000_000;
                 let t_gpst =
                     Epoch::from_time_of_week(runtime.gpst_week(), gpst_itow_nanos, TimeScale::GPST);
@@ -929,8 +923,8 @@ fn consume_device(
                 let _ = nav_tx.try_send(Message::EndofEpoch());
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::NavEoe(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::NavEoe(pkt)) => {
                 let gpst_itow_nanos = pkt.itow() as u64 * 1_000_000;
                 let t_gpst =
                     Epoch::from_time_of_week(runtime.gpst_week(), gpst_itow_nanos, TimeScale::GPST);
@@ -939,8 +933,8 @@ fn consume_device(
                 let _ = nav_tx.try_send(Message::EndofEpoch());
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::NavPvt(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::NavPvt(pkt)) => {
                 let (y, m, d) = (pkt.year() as i32, pkt.month(), pkt.day());
                 let (hh, mm, ss) = (pkt.hour(), pkt.min(), pkt.sec());
 
@@ -956,8 +950,8 @@ fn consume_device(
                     );
                 }
             },
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::NavPvt(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::NavPvt(pkt)) => {
                 let (y, m, d) = (pkt.year() as i32, pkt.month(), pkt.day());
                 let (hh, mm, ss) = (pkt.hour(), pkt.min(), pkt.sec());
 
@@ -973,8 +967,8 @@ fn consume_device(
                     );
                 }
             },
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::NavPvt(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::NavPvt(pkt)) => {
                 let (y, m, d) = (pkt.year() as i32, pkt.month(), pkt.day());
                 let (hh, mm, ss) = (pkt.hour(), pkt.min(), pkt.sec());
 
@@ -991,8 +985,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::NavClock(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::NavClock(pkt)) => {
                 // Do not process if user is not interested in this channel.
                 if ubx_settings.rawxm && ubx_settings.rx_clock {
                     let clock = pkt.clk_bias();
@@ -1009,8 +1003,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::NavClock(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::NavClock(pkt)) => {
                 // Do not process if user is not interested in this channel.
                 if ubx_settings.rawxm && ubx_settings.rx_clock {
                     let clock = pkt.clk_bias();
@@ -1027,8 +1021,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::NavClock(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::NavClock(pkt)) => {
                 // Do not process if user is not interested in this channel.
                 if ubx_settings.rawxm && ubx_settings.rx_clock {
                     let clock = pkt.clk_bias();
@@ -1045,8 +1039,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::InfTest(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::InfTest(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     trace!(
                         "{} - received test message {}",
@@ -1056,8 +1050,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::InfTest(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::InfTest(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     trace!(
                         "{} - received test message {}",
@@ -1067,8 +1061,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::InfTest(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::InfTest(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     trace!(
                         "{} - received test message {}",
@@ -1078,8 +1072,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::InfDebug(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::InfDebug(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     debug!(
                         "{} - received debug message {}",
@@ -1089,8 +1083,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::InfDebug(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::InfDebug(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     debug!(
                         "{} - received debug message {}",
@@ -1100,8 +1094,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::InfDebug(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::InfDebug(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     debug!(
                         "{} - received debug message {}",
@@ -1111,8 +1105,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::InfNotice(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::InfNotice(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     info!(
                         "{} - received notification {}",
@@ -1122,8 +1116,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::InfNotice(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::InfNotice(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     info!(
                         "{} - received notification {}",
@@ -1133,8 +1127,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::InfNotice(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::InfNotice(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     info!(
                         "{} - received notification {}",
@@ -1144,8 +1138,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::InfError(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::InfError(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     error!(
                         "{} - received error notification {}",
@@ -1155,8 +1149,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::InfError(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::InfError(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     error!(
                         "{} - received error notification {}",
@@ -1166,8 +1160,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::InfError(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::InfError(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     error!(
                         "{} - received error notification {}",
@@ -1177,8 +1171,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto23")]
-            ublox::UbxPacket::Proto23(PacketRef::InfWarning(pkt)) => {
+            #[cfg(feature = "ubx23")]
+            UbxPacket::Proto23(PacketRef::InfWarning(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     warn!(
                         "{} - received warning message {}",
@@ -1188,8 +1182,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto27")]
-            ublox::UbxPacket::Proto27(PacketRef::InfWarning(pkt)) => {
+            #[cfg(feature = "ubx27")]
+            UbxPacket::Proto27(PacketRef::InfWarning(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     warn!(
                         "{} - received warning message {}",
@@ -1199,8 +1193,8 @@ fn consume_device(
                 }
             },
 
-            #[cfg(feature = "proto31")]
-            ublox::UbxPacket::Proto31(PacketRef::InfWarning(pkt)) => {
+            #[cfg(feature = "ubx31")]
+            UbxPacket::Proto31(PacketRef::InfWarning(pkt)) => {
                 if let Some(msg) = pkt.message() {
                     warn!(
                         "{} - received warning message {}",
