@@ -199,7 +199,22 @@ impl<P: UbxProtocol> Device<P> {
         let mut found_packet = false;
         while !found_packet {
             self.consume_all_cb(buffer, |packet| {
-                if let PacketRef::AckAck(ack) = packet {
+                #[cfg(feature = "proto23")]
+                if let ublox::UbxPacket::Proto23(PacketRef::AckAck(ack)) = packet {
+                    if ack.class() == T::CLASS && ack.msg_id() == T::ID {
+                        found_packet = true;
+                    }
+                }
+
+                #[cfg(feature = "proto27")]
+                if let ublox::UbxPacket::Proto27(PacketRef::AckAck(ack)) = packet {
+                    if ack.class() == T::CLASS && ack.msg_id() == T::ID {
+                        found_packet = true;
+                    }
+                }
+
+                #[cfg(feature = "proto31")]
+                if let ublox::UbxPacket::Proto31(PacketRef::AckAck(ack)) = packet {
                     if ack.class() == T::CLASS && ack.msg_id() == T::ID {
                         found_packet = true;
                     }
@@ -239,7 +254,36 @@ impl<P: UbxProtocol> Device<P> {
 
         while !packet_found {
             self.consume_all_cb(buffer, |packet| {
-                if let PacketRef::MonVer(pkt) = packet {
+                #[cfg(feature = "proto23")]
+                if let ublox::UbxPacket::Proto23(PacketRef::MonVer(pkt)) = packet {
+                    let firmware = pkt.hardware_version();
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
+                    packet_found = true;
+                }
+
+                #[cfg(feature = "proto27")]
+                if let ublox::UbxPacket::Proto27(PacketRef::MonVer(pkt)) = packet {
+                    let firmware = pkt.hardware_version();
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
+                    packet_found = true;
+                }
+
+                #[cfg(feature = "proto31")]
+                if let ublox::UbxPacket::Proto31(PacketRef::MonVer(pkt)) = packet {
                     let firmware = pkt.hardware_version();
                     debug!("U-Blox Software version: {}", pkt.software_version());
                     debug!("U-Blox Firmware version: {}", firmware);
