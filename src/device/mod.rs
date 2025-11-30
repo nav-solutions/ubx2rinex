@@ -29,10 +29,8 @@ use ublox::packetref_proto31::PacketRef;
 use ublox::nav_pvt::proto14::NavPvt;
 #[cfg(feature = "ubx23")]
 use ublox::nav_pvt::proto23::NavPvt;
-#[cfg(feature = "ubx27")]
-use ublox::nav_pvt::proto27::NavPvt;
-#[cfg(feature = "ubx27")]
-use ublox::nav_pvt::proto31::NavPvt;
+#[cfg(any(feature = "ubx27", feature = "ubx31"))]
+use ublox::nav_pvt::proto27_31::NavPvt;
 
 mod interface;
 
