@@ -16,27 +16,25 @@ use ublox::{
     rxm_sfrbx::RxmSfrbx,
 };
 
+#[cfg(feature = "ubx14")]
+use ublox::packetref_proto14::PacketRef;
 #[cfg(feature = "ubx23")]
 use ublox::packetref_proto23::PacketRef;
-
-#[cfg(feature = "ubx23")]
-use ublox::nav_pvt::proto23::NavPvt;
-
-#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
+#[cfg(feature = "ubx27")]
 use ublox::packetref_proto27::PacketRef;
-
-#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
-use ublox::nav_pvt::proto27::NavPvt;
-
-#[cfg(all(feature = "ubx31", not(any(feature = "ubx23", feature = "ubx27"))))]
+#[cfg(feature = "ubx31")]
 use ublox::packetref_proto31::PacketRef;
 
-#[cfg(all(feature = "ubx27", not(feature = "ubx23")))]
+#[cfg(feature = "ubx14")]
+use ublox::nav_pvt::proto14::NavPvt;
+#[cfg(feature = "ubx23")]
+use ublox::nav_pvt::proto23::NavPvt;
+#[cfg(feature = "ubx27")]
+use ublox::nav_pvt::proto27::NavPvt;
+#[cfg(feature = "ubx27")]
 use ublox::nav_pvt::proto31::NavPvt;
 
 mod interface;
-
-use interface::Interface;
 
 use std::{
     fs::File,
@@ -45,6 +43,7 @@ use std::{
 };
 
 use crate::{UbloxSettings, collecter::Message, utils::from_timescale};
+use interface::Interface;
 
 use tokio::sync::mpsc::Sender;
 
@@ -196,6 +195,13 @@ impl<P: UbxProtocol> Device<P> {
         let mut found_packet = false;
         while !found_packet {
             self.consume_all_cb(buffer, |packet| {
+                #[cfg(feature = "ubx14")]
+                if let ublox::UbxPacket::Proto14(PacketRef::AckAck(ack)) = packet {
+                    if ack.class() == T::CLASS && ack.msg_id() == T::ID {
+                        found_packet = true;
+                    }
+                }
+
                 #[cfg(feature = "ubx23")]
                 if let ublox::UbxPacket::Proto23(PacketRef::AckAck(ack)) = packet {
                     if ack.class() == T::CLASS && ack.msg_id() == T::ID {
@@ -251,6 +257,20 @@ impl<P: UbxProtocol> Device<P> {
 
         while !packet_found {
             self.consume_all_cb(buffer, |packet| {
+                #[cfg(feature = "ubx14")]
+                if let ublox::UbxPacket::Proto14(PacketRef::MonVer(pkt)) = packet {
+                    let firmware = pkt.hardware_version();
+                    debug!("U-Blox Software version: {}", pkt.software_version());
+                    debug!("U-Blox Firmware version: {}", firmware);
+
+                    tx.try_send(Message::FirmwareVersion(pkt.hardware_version().to_string()))
+                        .unwrap_or_else(|e| {
+                            panic!("internal error reading firmware version: {}", e)
+                        });
+
+                    packet_found = true;
+                }
+
                 #[cfg(feature = "ubx23")]
                 if let ublox::UbxPacket::Proto23(PacketRef::MonVer(pkt)) = packet {
                     let firmware = pkt.hardware_version();
