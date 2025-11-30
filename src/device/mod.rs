@@ -90,7 +90,7 @@ impl<P: UbxProtocol> Device<P> {
         });
 
         Self {
-            parser: Default::default(),
+            parser: Parser::<_, P>::new(vec![]),
             interface: if fullpath.ends_with(".gz") {
                 Interface::from_gzip_file_handle(handle)
             } else {
@@ -107,7 +107,7 @@ impl<P: UbxProtocol> Device<P> {
             .unwrap_or_else(|e| panic!("Failed to open {} port: {}", port_str, e));
 
         let mut device = Self {
-            parser: Parser::<_, P>::default(),
+            parser: Parser::<_, P>::new(vec![]),
             interface: Interface::from_serial_port(port),
         };
 

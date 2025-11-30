@@ -19,16 +19,16 @@ extern crate gnss_rs as gnss;
 extern crate ublox;
 
 #[cfg(feature = "proto23")]
-pub(crate) type Proto = ublox_device::ublox::proto23::Proto23;
+pub(crate) type Proto = ublox::proto23::Proto23;
 
 #[cfg(all(feature = "proto27", not(feature = "proto23")))]
-pub(crate) type Proto = ublox_device::ublox::proto27::Proto27;
+pub(crate) type Proto = ublox::proto27::Proto27;
 
 #[cfg(all(
     feature = "proto31",
     not(any(feature = "proto23", feature = "proto27"))
 ))]
-pub(crate) type Proto = ublox_device::ublox::proto31::Proto31;
+pub(crate) type Proto = ublox::proto31::Proto31;
 
 use itertools::Itertools;
 
@@ -84,7 +84,7 @@ fn consume_device(
     runtime: &mut Runtime,
     obs_tx: &mut mpsc::Sender<Message>,
     nav_tx: &mut mpsc::Sender<Message>,
-    device: &mut Device,
+    device: &mut Device<Proto>,
     buffer: &mut [u8],
     cfg_precision: Duration,
     ubx_settings: &UbloxSettings,
@@ -481,7 +481,7 @@ pub async fn main() {
     let mut device = if let Some(serial) = cli.serial_port() {
         // active mode (GNSS module)
         let baud_rate = cli.baud_rate().unwrap_or(115_200);
-        Device::open_serial_port::<Proto>(serial, baud_rate, &mut buffer)
+        Device::<Proto>::open_serial_port(serial, baud_rate, &mut buffer)
     } else {
         // passive mode (input files)
         let user_files = cli.filepaths();
