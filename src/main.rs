@@ -856,7 +856,7 @@ fn consume_device(
             },
 
             #[cfg(feature = "ubx31")]
-            UbxPacket::Proto31(PacketRef::MonVer(pkt)) => {
+            UbxPacket::Proto31(PacketRef::MonVer(mon_version)) => {
                 let software_version = mon_version.software_version().to_string();
 
                 match obs_tx.try_send(Message::FirmwareVersion(software_version)) {
