@@ -27,7 +27,7 @@ rev = "eebd7c0de6e9b3f77cd909a70c76765e8ddc4516"
 features = ["obs", "nav"]
 
 [dependencies.ublox]
-version = "0.8"
+version = "0.10"
 features = ["std", "sfrbx-gps"]
 default-features = false
 
