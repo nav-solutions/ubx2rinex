@@ -1,6 +1,6 @@
 [package]
 name = "ubx2rinex"
-version = "0.3.0"
+version = "0.4.0"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "U-Blox to RINEX deserializer"
@@ -22,8 +22,7 @@ ubx27 = ["ublox/ubx_proto27"] # UBX V27
 ubx31 = ["ublox/ubx_proto31"] # UBX V31
 
 [dependencies.rinex]
-git = "https://github.com/nav-solutions/rinex"
-rev = "eebd7c0de6e9b3f77cd909a70c76765e8ddc4516"
+version = "0.23"
 features = ["obs", "nav"]
 
 [dependencies.ublox]
