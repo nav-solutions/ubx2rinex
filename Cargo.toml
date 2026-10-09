@@ -1,6 +1,6 @@
 [package]
 name = "ubx2rinex"
-version = "0.4.0"
+version = "0.4.1"
 license = "MPL-2.0"
 authors = ["Guillaume W. Bres <guillaume.bressaix@gmail.com>"]
 description = "U-Blox to RINEX deserializer"
@@ -20,10 +20,6 @@ ubx14 = ["ublox/ubx_proto14"] # UBX V14
 ubx23 = ["ublox/ubx_proto23"] # UBX V23
 ubx27 = ["ublox/ubx_proto27"] # UBX V27
 ubx31 = ["ublox/ubx_proto31"] # UBX V31
-
-[dependencies.rinex]
-version = "0.23"
-features = ["obs", "nav"]
 
 [dependencies.ublox]
 version = "0.8"
@@ -47,4 +43,5 @@ serialport = "4.7"
 env_logger = "0.11"
 pretty_env_logger = "0.5"
 tokio = { version = "1.48", features = ["full"] }
+rinex = { version = "0.23.2", features = ["obs", "nav"]}
 clap = { version = "4.4.10", features = ["derive", "color"] }
