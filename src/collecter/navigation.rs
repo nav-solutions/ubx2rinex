@@ -262,7 +262,7 @@ impl Collecter {
 
         // format payload
         let version = Version::from_major(self.settings.major);
-        ephemeris.format(fd, sv, version, NavMessageType::LNAV)?;
+        ephemeris.format(fd, sv, version, NavMessageType::LNAV, false)?;
 
         let _ = fd.flush();
 
