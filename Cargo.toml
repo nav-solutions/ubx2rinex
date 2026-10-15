@@ -22,7 +22,7 @@ ubx27 = ["ublox/ubx_proto27"] # UBX V27
 ubx31 = ["ublox/ubx_proto31"] # UBX V31
 
 [dependencies.ublox]
-version = "0.8"
+version = "0.10"
 features = ["std", "sfrbx-gps"]
 default-features = false
 
