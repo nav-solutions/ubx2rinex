@@ -43,5 +43,5 @@ serialport = "4.7"
 env_logger = "0.11"
 pretty_env_logger = "0.5"
 tokio = { version = "1.48", features = ["full"] }
-rinex = { version = "0.23.2", features = ["obs", "nav"]}
+rinex = { version = "0.24.0", features = ["obs", "nav"]}
 clap = { version = "4.4.10", features = ["derive", "color"] }
